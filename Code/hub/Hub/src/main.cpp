@@ -7,6 +7,7 @@ constexpr uint16_t C_WHITE = TFT_WHITE, C_RED1 = 0xFEBA, C_RED2 = 0xFD34, C_RED3
 constexpr uint16_t C_OPT = 0x18E3; 
 
 constexpr int W = 320, H = 240;
+
 constexpr int HEADER_H = 50, MGN = 10, GAP = 10;
 constexpr int BTN_W = (W - (MGN * 2) - GAP) / 2;
 
@@ -32,9 +33,7 @@ Screen currentScreen = HOME;
 bool locked = false;
 
 Button *bLock = nullptr;
-Button *bGreen = nullptr;
 Button *bBlue = nullptr;
-Button *bGrey = nullptr;
 
 Button *bOpt1 = nullptr;
 Button *bOpt2 = nullptr;
@@ -45,9 +44,7 @@ Button *bOpt6 = nullptr;
 
 void clearButtons() {
     if (bLock) { delete bLock; bLock = nullptr; }
-    if (bGreen) { delete bGreen; bGreen = nullptr; }
     if (bBlue) { delete bBlue; bBlue = nullptr; }
-    if (bGrey) { delete bGrey; bGrey = nullptr; }
 
     if (bOpt1) { delete bOpt1; bOpt1 = nullptr; }
     if (bOpt2) { delete bOpt2; bOpt2 = nullptr; }
@@ -65,10 +62,8 @@ void animateBtn(int x, int y, int w, int h, int r, uint16_t c) {
 
 void initHomeButtons() {
     clearButtons();
-    bLock = new Button(C1_X, R1_Y, BTN_W, R1_H, false, "L");
-    bGreen = new Button(C2_X, R1_Y, BTN_W, R1_H, false, "G");
-    bBlue = new Button(C1_X, R2_Y, BTN_W, R2_H, false, "B");
-    bGrey = new Button(C2_X, R2_Y, BTN_W, R2_H, false, "GR");
+    bLock = new Button(C1_X, R2_Y, BTN_W, R2_H, false, "L");
+    bBlue = new Button(C2_X, R2_Y, BTN_W, R2_H, false, "B");
 }
 
 void initOptionsButtons() {
@@ -118,29 +113,17 @@ void drawHome() {
     M5.Lcd.setTextDatum(TC_DATUM);
     M5.Lcd.drawString(locked ? "Alarme en cours" : "Vous etes protege", W / 2, 60);
 
-    M5.Lcd.fillRoundRect(C1_X, R1_Y, BTN_W, R1_H, R1_R, C_RED);
-    M5.Lcd.pushImage(C1_X + (BTN_W - 50) / 2, R1_Y + (R1_H - 50) / 2 - 12, 50, 50, (uint16_t *)siren, 0x0000);
-
-    M5.Lcd.setTextDatum(BC_DATUM);
+    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
     M5.Lcd.setTextColor(C_WHITE, C_RED);
-    M5.Lcd.drawString("Alarme", C1_X + BTN_W / 2, 165);
+    M5.Lcd.setTextDatum(BC_DATUM);
+    M5.Lcd.drawString("Alarme", (C1_X + BTN_W / 2) + 25, 218);
+    M5.Lcd.pushImage((C1_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)siren, 0x0000);
 
-    M5.Lcd.fillRoundRect(C2_X, R1_Y, BTN_W, R1_H, R1_R, C_GREEN);
-    M5.Lcd.setTextColor(C_WHITE, C_GREEN);
-    M5.Lcd.setTextDatum(BR_DATUM);
-    M5.Lcd.drawString("Deverouiller", C2_X + BTN_W - 13, 165);
-
-    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
+    M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
     M5.Lcd.setTextColor(C_WHITE, C_BLUE);
     M5.Lcd.setTextDatum(BC_DATUM);
-    M5.Lcd.drawString("Options", (C1_X + BTN_W / 2) + 25, 218);
-    M5.Lcd.pushImage((C1_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)gear, 0x0000);
-    
-    M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_GREY);
-    M5.Lcd.setTextColor(C_WHITE, C_GREY);
-    M5.Lcd.setTextDatum(BC_DATUM);
-    M5.Lcd.drawString("Redemarrer", (C2_X + BTN_W / 2) + 25, 218);
-    M5.Lcd.pushImage((C2_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)reboot_image, 0x0000);
+    M5.Lcd.drawString("Options", (C2_X + BTN_W / 2) + 25, 218);
+    M5.Lcd.pushImage((C2_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)gear, 0x0000);
 }
 
 void drawOptions() {
@@ -149,9 +132,9 @@ void drawOptions() {
 
     M5.Lcd.setTextSize(1);
     M5.Lcd.setFreeFont(&FreeSansBold18pt7b);
-    M5.Lcd.setTextDatum(ML_DATUM);
+    M5.Lcd.setTextDatum(MC_DATUM);
     M5.Lcd.setTextColor(C_WHITE, C_BLUE);
-    M5.Lcd.drawString("Reglages", 10, 28);
+    M5.Lcd.drawString("Reglages", W / 2, HEADER_H / 2);
 
     M5.Lcd.setFreeFont(&FreeSans12pt7b);
     M5.Lcd.setTextDatum(MC_DATUM);
@@ -174,7 +157,8 @@ void drawOptions() {
 
     M5.Lcd.fillRoundRect(C2_X, O_Y3, O_W, O_H, O_R, C_GREY);
     M5.Lcd.setTextColor(C_WHITE, C_GREY);
-    M5.Lcd.drawString("Retour", C2_X + O_W/2, O_Y3 + O_H/2);
+    M5.Lcd.drawString("Retour", (C2_X + O_W/2) + 25, O_Y3 + O_H/2);
+    M5.Lcd.pushImage((C2_X + (O_W - 50) / 2) - 43, O_Y3 + (O_H - 50) / 2, 50, 50, (uint16_t *)exit_door, 0x0000);
 }
 
 void setScreen(Screen s) {
@@ -202,21 +186,11 @@ void loop() {
                 locked = true; 
                 drawHome(); 
             }
-            animateBtn(C1_X, R1_Y, BTN_W, R1_H, R1_R, C_RED);
-        }
-        if (bGreen && bGreen->wasPressed()) {
-            if (locked) { 
-                locked = false; 
-                drawHome(); 
-            }
-            animateBtn(C2_X, R1_Y, BTN_W, R1_H, R1_R, C_GREEN);
+            animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
         }
         if (bBlue && bBlue->wasPressed()) {
-            animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
+            animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
             setScreen(OPTIONS);
-        }
-        if (bGrey && bGrey->wasPressed()) {
-             animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_GREY);
         }
 
     } else if (currentScreen == OPTIONS) {

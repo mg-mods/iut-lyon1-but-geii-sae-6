@@ -1,9 +1,11 @@
 #include <M5Unified.h>
 #include <driver/dac.h>
+#include <SPI.h>
+#include <MFRC522.h>
+#include "Vogitek_Logo.h"
 
-#define LedRed   13
+#define LedRed 13
 #define LedGreen 14
-
 
 void DrawButtons(void);
 void DrawButton(int x1, int y1, int x2, int y2);
@@ -14,19 +16,36 @@ void drawAllDigitNeon(void);
 void UpdateDigit(String InputUser);
 void ShakeWrongPass(String text, int x, int y);
 void GoodPass(String text, int x, int y);
+void GoodSound(void);
+void WrongSound(void);
 
 // résolution écran: L320*H240
 String InputUser = "", PassWord = "1111111";
+
+#define RST_PIN 33
+#define SS_PIN 27
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);
 
 void setup()
 {
   M5.begin();
   M5.Speaker.begin();
+  M5.Lcd.setRotation(2);
+  ///////////////////////////demarrage logo
+  M5.Lcd.fillScreen(BLACK);
+  M5.Lcd.setSwapBytes(true);
+  M5.Lcd.pushImage(0, 40, 240, 240, (uint16_t *)Vogitek_Logo, 0x0000);
+  delay(3000);
+
+  ///////////////////////////////
+  SPI.begin(18, 38, 23, SS_PIN);
+
+  mfrc522.PCD_Init();
   pinMode(LedGreen, OUTPUT);
   pinMode(LedRed, OUTPUT);
   digitalWrite(LedRed, HIGH);
   digitalWrite(LedGreen, LOW);
-  M5.Lcd.setRotation(2);
   M5.Lcd.fillScreen(TFT_DARKGREY);
   DrawButtons();
   drawAllDigitNeon();
@@ -44,26 +63,14 @@ void loop()
       digitalWrite(LedRed, oldValueGreen);
       digitalWrite(LedGreen, oldValueRed);
       GoodPass(InputUser, 15, 15);
-      // Mélodie succès : 3 notes ascendantes
-      M5.Speaker.tone(1000, 150);
-      delay(150);
-      M5.Speaker.tone(1200, 150);
-      delay(150);
-      M5.Speaker.tone(1400, 200);
-      delay(200);
+      GoodSound();
 
       delay(1000);
     }
     else
     {
       ShakeWrongPass(InputUser, 15, 15);
-      // Mélodie échec : note descendante
-      M5.Speaker.setVolume(M5.Speaker.getVolume() + 50);
-      M5.Speaker.tone(800, 200);
-      delay(200);
-      M5.Speaker.tone(600, 200);
-      delay(200);
-      M5.Speaker.setVolume(M5.Speaker.getVolume() - 50);
+      WrongSound();
     }
     InputUser = "";
     UpdateDigit(InputUser);
@@ -105,6 +112,33 @@ void loop()
       UpdateDigit(InputUser);
     }
   }
+
+  // Vérifier si une nouvelle carte est présente
+  if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial())
+  {
+    String uid = "";
+    for (byte i = 0; i < mfrc522.uid.size; i++)
+    {
+      uid += String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+      uid += String(mfrc522.uid.uidByte[i], HEX);
+    }
+    uid.toUpperCase();
+
+    if (uid == " 39 72 34 94")
+    {
+      GoodPass("OK", 95, 15);
+      GoodSound();
+    }
+    else
+    {
+      ShakeWrongPass("wrong", 50, 15);
+      WrongSound();
+    }
+    // Arrête la lecture
+    mfrc522.PICC_HaltA();
+    InputUser = "";
+    UpdateDigit(InputUser);
+  }
 }
 
 // --- FONCTIONS POUR L'EFFET APPUYÉ ---
@@ -118,14 +152,13 @@ void DrawButtonPressed(int x1, int y1, int x2, int y2)
 void PressButton(int x1, int y1, int x2, int y2, String digit)
 {
   DrawButtonPressed(x1, y1, x2, y2);
-  delay(50); // Durée de l'effet appuyé
+  delay(50);
   DrawButton(x1, y1, x2, y2);
   drawAllDigitNeon();
   InputUser += digit;
   M5.Speaker.tone(1500, 50);
 }
 
-// --- FONCTIONS EXISTANTES ---
 void drawAllDigitNeon(void)
 {
   drawDigitNeon(189, 34, 7);
@@ -232,4 +265,24 @@ void GoodPass(String text, int x, int y)
   M5.Lcd.setCursor(x, y);
   M5.Lcd.print(text);
   M5.Lcd.setTextSize(3);
+}
+
+void WrongSound(void)
+{
+  M5.Speaker.setVolume(M5.Speaker.getVolume() + 50);
+  M5.Speaker.tone(800, 200);
+  delay(200);
+  M5.Speaker.tone(600, 200);
+  delay(200);
+  M5.Speaker.setVolume(M5.Speaker.getVolume() - 50);
+}
+
+void GoodSound(void)
+{
+  M5.Speaker.tone(1000, 150);
+  delay(150);
+  M5.Speaker.tone(1200, 150);
+  delay(150);
+  M5.Speaker.tone(1400, 200);
+  delay(200);
 }

@@ -5,7 +5,7 @@ donf Frequence de la porteuse: 10khz
 ```mermaid
 ---
 config:
-  theme: base
+  theme: forest
   themeVariables:
     primaryColor: "#00ff00"
 ---

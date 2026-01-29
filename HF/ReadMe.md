@@ -1,4 +1,49 @@
 frequence d'envie des information: 1kbit/s 
 donf Frequence de la porteuse: 10khz
 
-[![](https://mermaid.ink/img/pako:eNp9kk1uwjAQha8SzbIKKHF-8aKLwhIEKxZtunATE6wmNnKcqi3iQJyDi3USiKESIgtrnmf8Td5o9pCrggOFxjDDZ4KVmtWjL5JJB7-F8B2KZ65VrqTRquKtPqfWXWY9XV4KeSfr07HisrQ1y6q7VU0uKoS32qlUzqpzbvXS5TaiMpo7O9Y03PlgsuADj9zlkQc88oC3ms8xi-fgi9zz1c_AqVXRIl8o6eztGEaj57U_OEeBhq3HW4kBSjRnXaJ8e3rP5GHgz07Ha4tLB6zoKcQavZUY9FBirXZyMINBVyxI3-OKxst_rcCFUosC6IZVDXeh5rpmnYb-JzIwW17zDCiGBdOfGSAQH-2YfFWqBmp0i8-0asuthbS74ro39lZznLyeqlYaoH4cBj0F6B6-gQZePE7DIPV9L4j8KCaRCz9YFqRjEpMgCdMkmZBJcnDht-_rjRMSBXFIvDghXhSG-IAXwii9OO9uv8KHPwJw2jw?type=png)](https://mermaid.live/edit#pako:eNp9kk1uwjAQha8SzbIKKHF-8aKLwhIEKxZtunATE6wmNnKcqi3iQJyDi3USiKESIgtrnmf8Td5o9pCrggOFxjDDZ4KVmtWjL5JJB7-F8B2KZ65VrqTRquKtPqfWXWY9XV4KeSfr07HisrQ1y6q7VU0uKoS32qlUzqpzbvXS5TaiMpo7O9Y03PlgsuADj9zlkQc88oC3ms8xi-fgi9zz1c_AqVXRIl8o6eztGEaj57U_OEeBhq3HW4kBSjRnXaJ8e3rP5GHgz07Ha4tLB6zoKcQavZUY9FBirXZyMINBVyxI3-OKxst_rcCFUosC6IZVDXeh5rpmnYb-JzIwW17zDCiGBdOfGSAQH-2YfFWqBmp0i8-0asuthbS74ro39lZznLyeqlYaoH4cBj0F6B6-gQZePE7DIPV9L4j8KCaRCz9YFqRjEpMgCdMkmZBJcnDht-_rjRMSBXFIvDghXhSG-IAXwii9OO9uv8KHPwJw2jw)
+
+```mermaid
+---
+config:
+  layout: elk
+---
+stateDiagram
+  direction TB
+  state modulation {
+    direction TB
+    Mi1 --> V1
+    V1 --> Me1
+    Ol1 --> Me1
+    Me1 --> PB1
+    PB1 --> [*]
+    Mi1
+    V1
+    Me1
+    Ol1
+    PB1
+[*]  }
+  state Démodulation {
+    direction TB
+    [*] --> Me2
+    Ol2 --> Me2
+    Me2 --> PB2
+    PB2 --> PLL
+    PLL --> Mi2
+    Me2
+    Ol2
+    PB2
+    PLL
+    Mi2
+[*]  }
+  modulation --> Démodulation
+  Mi1:Microcontroleur
+  V1:VCO
+  Me1:mélengeur
+  Ol1:oscilateur local
+  PB1:filtre passe bande
+  Me2:mélengeur
+  Ol2:oscilateur local
+  PB2:filtre passe bande
+  Mi2:Microcontroleur
+
+  ```

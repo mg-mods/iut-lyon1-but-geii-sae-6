@@ -7,7 +7,8 @@ donf Frequence de la porteuse: 10khz
 config:
   theme: forest
   themeVariables:
-    primaryColor: "#00ff00"
+    lineColor: '#FFA100'
+
 ---
 
 stateDiagram

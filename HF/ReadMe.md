@@ -5,8 +5,11 @@ donf Frequence de la porteuse: 10khz
 ```mermaid
 ---
 config:
-  layout: elk
+  theme: base
+  themeVariables:
+    primaryColor: "#00ff00"
 ---
+
 stateDiagram
   direction TB
   state modulation {

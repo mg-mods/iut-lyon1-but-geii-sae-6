@@ -4,8 +4,8 @@
 #include <MFRC522.h>
 #include "Vogitek_Logo.h"
 
-#define LedRed 13
-#define LedGreen 14
+#define LedRed 35
+#define LedGreen 36
 
 void DrawButtons(void);
 void DrawButton(int x1, int y1, int x2, int y2);
@@ -30,6 +30,7 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 void setup()
 {
   M5.begin();
+
   M5.Speaker.begin();
   M5.Lcd.setRotation(2);
   ///////////////////////////demarrage logo
@@ -49,15 +50,26 @@ void setup()
   M5.Lcd.fillScreen(TFT_DARKGREY);
   DrawButtons();
   drawAllDigitNeon();
+
+  Serial2.begin(9600, SERIAL_8N1, 13, 14);
 }
 
 void loop()
 {
   M5.update();
-
-  if (InputUser.length() >= PassWord.length()) // prévoyez tâche pour son et animation en simultané
+  delay(50);
+  if (InputUser.length() >= PassWord.length()) // prévoir tâche pour son et animation en simultané
   {
-    if (InputUser == PassWord)
+    Serial2.println("M"+InputUser);
+
+    while (Serial2.available() == 0)
+    {
+      delay(1);
+    }
+    String StatInput = Serial2.readString();
+    UpdateDigit(StatInput);
+    delay(1000);
+    if (StatInput=="TRUE")
     {
       bool oldValueRed = digitalRead(LedRed), oldValueGreen = digitalRead(LedGreen);
       digitalWrite(LedRed, oldValueGreen);
@@ -72,6 +84,7 @@ void loop()
       ShakeWrongPass(InputUser, 15, 15);
       WrongSound();
     }
+
     InputUser = "";
     UpdateDigit(InputUser);
   }

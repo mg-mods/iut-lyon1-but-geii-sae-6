@@ -20,8 +20,8 @@ constexpr int Ecart_Text = 20;
 
 typedef struct t_message_lcd
 {
-  String msg;
-  uint8_t ligne;
+    char msg[TRAME_SIZE];
+    uint8_t ligne;
 } t_message_lcd;
 
 constexpr int W = 320, H = 240;
@@ -67,54 +67,68 @@ static QueueHandle_t queueAffichage;
 void Serial_callback()
 {
     char c;
-    while (Serial.available() > 0)
+    while (Serial2.available() > 0)
     {                                                                     // Si au moins 1 caractère reçu
-        Serial.read(&c, 1);                                               // Le lire
+        c = Serial2.read();                                               // Le lire
         xQueueSendToBack(queueReceptionSerie, (void *)&c, portMAX_DELAY); // L'envoyer dans la file
     }
 }
 
 void taskTraiteTrame(void *pvParameters)
 {
-  char buffer[TRAME_SIZE];
-  uint8_t i = 0;
-  t_message_lcd message;
-  while (1)
-  {
-    if (xQueueReceive(queueReceptionSerie, (void *)&buffer[i], 1))
-    { // On stock les caractères reçu dans "buffer"
-      if (buffer[i] == '\r' || buffer[i] == '\n')
-      { // \r ou \n marquent la fin de la trame
-        buffer[i] = '\0';
-        if (buffer[0] == 'E' && i == 1)
-        { // Echo, la trame contient juste E
-          logSerial("E");
-        }
-        else if (buffer[0] == '\0')
-        { // Ignore les trames vides qui contiennent juste \r ou \n
-          i = 0;
-        }
-        else if (std::regex_match(std::string(buffer), std::regex("L[1-3][' _!?.,;0-9a-zéèàêA-Z]{1,}")))
-        {
-          logSerial("Ajout ligne %u : %s", buffer[1] - '0', &buffer[2]); // Renvoie de la trame décodée
-          message.msg = &buffer[2];
-          message.ligne = buffer[1] - 48;
+    char buffer[TRAME_SIZE];
+    uint8_t i = 0;
+    t_message_lcd message;
+    while (1)
+    {
+        if (xQueueReceive(queueReceptionSerie, (void *)&buffer[i], portMAX_DELAY))
+        { // On stock les caractères reçu dans "buffer"
+            if (buffer[i] == '\r' || buffer[i] == '\n')
+            { // \r ou \n marquent la fin de la trame
+                buffer[i] = '\0';
+                if (buffer[0] == 'E' && i == 1)
+                { // Echo, la trame contient juste E
+                    logSerial("E");
+                }
+                else if (buffer[0] == '\0')
+                { // Ignore les trames vides qui contiennent juste \r ou \n
+                    i = 0;
+                }
+                else if (std::regex_match(std::string(buffer), std::regex("L[1-3][' _!?.,;0-9a-zéèàêA-Z]{1,}")))
+                {
+                    logSerial("Ajout ligne %u : %s", buffer[1] - '0', &buffer[2]); // Renvoie de la trame décodée
+                    snprintf(message.msg, sizeof(message.msg), "%s", &buffer[2]);
+                    message.ligne = buffer[1] - 48;
 
-          xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+                    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+                }
+                else if (std::regex_match(std::string(buffer), std::regex("M[' _!?.,;0-9a-zéèàêA-Z]{1,}")))
+                {
+                    Serial.println(buffer);
+                    if (std::string(buffer) == "M1111111")
+                    {
+                        Serial2.print("TRUE");
+                        Serial.println("TRUE");
+                    }
+                    else
+                    {
+                        Serial2.print("FALSE");
+                        Serial.println("FALSE");
+                    }
+                }
+                else
+                {
+                    logSerial("ERROR");
+                }
+                i = 0;
+            }
+            else
+            {
+                if (++i > TRAME_SIZE - 1)
+                    i = 0; // Attention à ne pas dépasser 39 !
+            }
         }
-        else
-        {
-          logSerial("ERROR");
-        }
-        i = 0;
-      }
-      else
-      {
-        if (++i > TRAME_SIZE - 1)
-          i = 0; // Attention à ne pas dépasser 39 !
-      }
     }
-  }
 }
 
 void clearButtons()
@@ -299,16 +313,17 @@ void setup()
     M5.begin();
     logSerial("Initialise");
     setScreen(HOME);
+    Serial2.begin(9600, SERIAL_8N1, 13, 14);
 
     RTC_TimeTypeDef TimeStruct;
-    TimeStruct.Hours   = 16;
+    TimeStruct.Hours = 16;
     TimeStruct.Minutes = 26;
     TimeStruct.Seconds = 47;
     M5.Rtc.SetTime(&TimeStruct);
 
     queueReceptionSerie = xQueueCreate(TRAME_SIZE, sizeof(char));
     queueAffichage = xQueueCreate(3, sizeof(t_message_lcd));
-    Serial.onReceive(Serial_callback);
+    Serial2.onReceive(Serial_callback);
 
     xTaskCreatePinnedToCore(taskTraiteTrame, // Function
                             "traiteTrame",   // Name

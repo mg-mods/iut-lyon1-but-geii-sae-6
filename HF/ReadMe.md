@@ -34,7 +34,9 @@ stateDiagram
     Ol2 --> Me2
     Me2 --> PB3
     PB3 --> PLL
-    PLL --> Mi2
+    PLL --> PB4
+    PB4 -->trig
+     trig -->Mi2
 [*]    Me2
     Ol2
     PB3
@@ -46,11 +48,12 @@ stateDiagram
   V1:VCO
   Ol1:oscilateur local 13Mhz
   PB1:filtre passe Bas fc=13Mhz
-  PB2:filtre passe Bas Fc=100khz
+  PB2:filtre passe Bas Fc=100khz ordre2
   Me1:mélangeur
   Me2:mélangeur
   Ol2:oscilateur local 13Mhz
-  PB3:filtre passe bande centré sur 100kHz
-  Mi2:Microcontroleur
+  PB3:filtre passe bande centré sur 100kHz ordre2
+  PB4:filtre passe bas Fc=20kHz ordre 2
+  trig:Triger de schmitz
 
   ```

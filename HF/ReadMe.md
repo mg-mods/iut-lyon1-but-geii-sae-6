@@ -18,8 +18,8 @@ stateDiagram
     Mi1 --> V1
     Ol1 --> PB1
     V1 --> PB2
-    PB2 --> Me1
-    PB1 --> Me1
+    PB2 --> Me1 :Tension=100mVpp
+    PB1 --> Me1 :Tension =1 a 2 Vpp
     Me1 --> [*]
     Mi1
     V1
@@ -44,13 +44,13 @@ stateDiagram
   modulation --> Démodulation
   Mi1:Microcontroleur
   V1:VCO
-  Ol1:oscilateur local
-  PB1:filtre passe Bas
-  PB2:filtre passe Bas
+  Ol1:oscilateur local 13Mhz
+  PB1:filtre passe Bas fc=13Mhz
+  PB2:filtre passe Bas Fc=100khz
   Me1:mélangeur
   Me2:mélangeur
-  Ol2:oscilateur local
-  PB3:filtre passe bande
+  Ol2:oscilateur local 13Mhz
+  PB3:filtre passe bande centré sur 100kHz
   Mi2:Microcontroleur
 
   ```

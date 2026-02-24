@@ -11,13 +11,13 @@ constexpr uint16_t C_RED = 0xE8E4, C_GREEN = 0x07E0, C_DARKGREEN = 0x0546, C_BLU
 constexpr uint16_t C_WHITE = TFT_WHITE, C_RED1 = 0xFEBA, C_RED2 = 0xFD34, C_RED3 = 0xFB6D, C_RED4 = 0xF9C7, C_RED5 = 0xF800;
 constexpr uint16_t C_OPT = 0x18E3;
 
-// Décommenter la ligne suivante pour utiliser Serial2 comme port principal (console/commandes)
+// Décommenter la ligne suivante pour utiliser Serial2 comme port principal
 // #define USE_SERIAL2
 
 #ifdef USE_SERIAL2
-    #define SysSerial Serial2
+#define SysSerial Serial2
 #else
-    #define SysSerial Serial
+#define SysSerial Serial
 #endif
 
 void Serial_callback();
@@ -78,7 +78,7 @@ void Serial_callback()
     char c;
     while (SysSerial.available() > 0)
     {                                                                     // Si au moins 1 caractère reçu
-        c = SysSerial.read();                                               // Le lire
+        c = SysSerial.read();                                             // Le lire
         xQueueSendToBack(queueReceptionSerie, (void *)&c, portMAX_DELAY); // L'envoyer dans la file
     }
 }
@@ -103,11 +103,11 @@ void taskTraiteTrame(void *pvParameters)
                 { // Ignore les trames vides qui contiennent juste \r ou \n
                     i = 0;
                 }
-                else if (std::regex_match(std::string(buffer), std::regex("L[1-3][' _!?.,;0-9a-zéèàêA-Z]{1,}")))
+                else if (std::regex_match(std::string(buffer), std::regex("L[' _!?.,;0-9a-zéèàêA-Z]{1,}")))
                 {
-                    logSerial("Ajout ligne %u : %s", buffer[1] - '0', &buffer[2]); // Renvoie de la trame décodée
-                    snprintf(message.msg, sizeof(message.msg), "%s", &buffer[2]);
-                    message.ligne = buffer[1] - 48;
+                    logSerial("Texte recu : %s", &buffer[1]); // Renvoie de la trame décodée
+                    snprintf(message.msg, sizeof(message.msg), "%s", &buffer[1]);
+                    message.ligne = 0; // Non utilisé
 
                     xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
                 }
@@ -409,28 +409,33 @@ void logSerial(const char *format, ...)
 void taskGestionLcd(void *pvParameters)
 {
     t_message_lcd msg;
+    char displayBuffer[3][64]; // Buffer pour les 3 lignes
+    for (int i = 0; i < 3; i++) displayBuffer[i][0] = '\0';
+
     while (true)
     {
         if (xQueueReceive(queueAffichage, (void *)&msg, portMAX_DELAY))
         {
-            // Calcul de la position Y (Ligne 1, 2 ou 3)
-            // On utilise Ecart_Text (25). Ligne 1 -> 25px, Ligne 2 -> 50px...
-            int y = msg.ligne * Ecart_Text + 75;
+            // Décalage des lignes (scrolling)
+            strcpy(displayBuffer[0], displayBuffer[1]);
+            strcpy(displayBuffer[1], displayBuffer[2]);
 
-            // On efface la zone précédente (rectangle noir)
-            M5.Lcd.fillRect(MGN + 5, y, W - (MGN * 2) - 10, Ecart_Text, C_GREY);
+            // Nouvelle ligne
+            RTC_TimeTypeDef TimeStruct;
+            M5.Rtc.GetTime(&TimeStruct);
+            snprintf(displayBuffer[2], sizeof(displayBuffer[2]), "[%02d:%02d:%02d] %s", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, msg.msg);
 
-            // Configuration du texte
             M5.Lcd.setTextColor(C_WHITE, C_GREY);
             M5.Lcd.setTextSize(2); // Taille standard lisible
             M5.Lcd.setTextFont(1); // Police par défaut pour éviter les conflits avec FreeFonts
 
-            // Affichage
-            RTC_TimeTypeDef TimeStruct;
-            M5.Rtc.GetTime(&TimeStruct);
-            M5.Lcd.setCursor(20, y);
-            M5.Lcd.printf("[%02d:%02d:%02d] ", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds);
-            M5.Lcd.print(msg.msg);
+            for (int i = 0; i < 3; i++)
+            {
+                int y = (i + 1) * Ecart_Text + 75;
+                M5.Lcd.fillRect(MGN + 5, y, W - (MGN * 2) - 10, Ecart_Text, C_GREY);
+                M5.Lcd.setCursor(20, y);
+                M5.Lcd.print(displayBuffer[i]);
+            }
         }
     }
 }

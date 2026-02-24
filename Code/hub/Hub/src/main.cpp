@@ -11,6 +11,15 @@ constexpr uint16_t C_RED = 0xE8E4, C_GREEN = 0x07E0, C_DARKGREEN = 0x0546, C_BLU
 constexpr uint16_t C_WHITE = TFT_WHITE, C_RED1 = 0xFEBA, C_RED2 = 0xFD34, C_RED3 = 0xFB6D, C_RED4 = 0xF9C7, C_RED5 = 0xF800;
 constexpr uint16_t C_OPT = 0x18E3;
 
+// Décommenter la ligne suivante pour utiliser Serial2 comme port principal (console/commandes)
+// #define USE_SERIAL2
+
+#ifdef USE_SERIAL2
+    #define SysSerial Serial2
+#else
+    #define SysSerial Serial
+#endif
+
 void Serial_callback();
 void taskGestionLcd(void *pvParameters);
 void logSerial(const char *format, ...);
@@ -67,9 +76,9 @@ static QueueHandle_t queueAffichage;
 void Serial_callback()
 {
     char c;
-    while (Serial2.available() > 0)
+    while (SysSerial.available() > 0)
     {                                                                     // Si au moins 1 caractère reçu
-        c = Serial2.read();                                               // Le lire
+        c = SysSerial.read();                                               // Le lire
         xQueueSendToBack(queueReceptionSerie, (void *)&c, portMAX_DELAY); // L'envoyer dans la file
     }
 }
@@ -311,9 +320,9 @@ void setScreen(Screen s)
 void setup()
 {
     M5.begin();
+    Serial2.begin(9600, SERIAL_8N1, 13, 14);
     logSerial("Initialise");
     setScreen(HOME);
-    Serial2.begin(9600, SERIAL_8N1, 13, 14);
 
     RTC_TimeTypeDef TimeStruct;
     TimeStruct.Hours = 16;
@@ -323,7 +332,7 @@ void setup()
 
     queueReceptionSerie = xQueueCreate(TRAME_SIZE, sizeof(char));
     queueAffichage = xQueueCreate(3, sizeof(t_message_lcd));
-    Serial2.onReceive(Serial_callback);
+    SysSerial.onReceive(Serial_callback);
 
     xTaskCreatePinnedToCore(taskTraiteTrame, // Function
                             "traiteTrame",   // Name
@@ -394,7 +403,7 @@ void logSerial(const char *format, ...)
 
     RTC_TimeTypeDef TimeStruct;
     M5.Rtc.GetTime(&TimeStruct);
-    Serial.printf("[%02d:%02d:%02d] %s\n", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, buffer);
+    SysSerial.printf("[%02d:%02d:%02d] %s\n", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, buffer);
 }
 
 void taskGestionLcd(void *pvParameters)

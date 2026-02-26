@@ -10,6 +10,8 @@ constexpr uint16_t C_RED = 0xE8E4, C_GREEN = 0x07E0, C_DARKGREEN = 0x0546, C_BLU
 constexpr uint16_t C_WHITE = TFT_WHITE, C_RED1 = 0xFEBA, C_RED2 = 0xFD34, C_RED3 = 0xFB6D, C_RED4 = 0xF9C7, C_RED5 = 0xF800;
 constexpr uint16_t C_OPT = 0x18E3;
 
+//#define USE_SERIAL2 //Définir pour utiliser Serial2
+
 #ifdef USE_SERIAL2
 #define SysSerial Serial2
 #else
@@ -20,7 +22,7 @@ void Serial_callback();
 void taskGestionLcd(void *pvParameters);
 void logSerial(const char *format, ...);
 
-constexpr int TRAME_SIZE = 40;
+constexpr int TRAME_SIZE = 128;
 constexpr int Ecart_Text = 20;
 
 typedef struct t_message_lcd
@@ -67,7 +69,7 @@ Button *bOpts[OPTION_COUNT] = {nullptr};
 
 static QueueHandle_t queueReceptionSerie;
 static QueueHandle_t queueAffichage;
-char displayBuffer[4][64];
+char displayBuffer[4][TRAME_SIZE];
 
 void Serial_callback()
 {
@@ -86,7 +88,7 @@ bool isValidPayload(const char *str)
     while (*str)
     {
         char c = *str;
-        if (!isalnum(c) && c != ' ' && c != '_' && c != '!' && c != '?' && c != '.' && c != ',' && c != ';' && c != '\'' && (uint8_t)c < 128)
+        if (!isalnum(c) && c != ' ' && c != '_' && c != '!' && c != '?' && c != '.' && c != ',' && c != ';' && c != ':' && c != '\'' && (uint8_t)c < 128)
         {
             return false;
         }
@@ -100,6 +102,9 @@ void taskTraiteTrame(void *pvParameters)
     char buffer[TRAME_SIZE];
     uint8_t i = 0;
     t_message_lcd message;
+
+    const String IDdigi = "IDdigi";
+    const String IDhub = "IDhub";
 
     while (1)
     {
@@ -117,11 +122,27 @@ void taskTraiteTrame(void *pvParameters)
                 {
                     i = 0;
                 }
-                else if (buffer[0] == 'L' && isValidPayload(&buffer[1]))
+                else if (buffer[0] == 'S' && buffer[1] == 'T' && buffer[2] == 'R')
                 {
-                    logSerial("Texte recu : %s", &buffer[1]);
-                    snprintf(message.msg, sizeof(message.msg), "%s", &buffer[1]);
-                    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+                    char src[18] = {0}, dest[18] = {0}, type[16] = {0}, val[16] = {0};
+                    if (sscanf(buffer, "STR:%17[^:]:%17[^:]:%15[^:]:%15s", src, dest, type, val) == 4)
+                    {
+                        logSerial("Recu: Src=%s Dest=%s Typ=%s Val=%s", src, dest, type, val);
+                        snprintf(message.msg, sizeof(message.msg), "%s / %s / %s / %s", src, dest, type, val);
+                        xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+                        Serial.println("Test ok");
+                    }
+                    else if (isValidPayload(&buffer[4]))
+                    {
+                        logSerial("Texte recu au mauvais format : %s", &buffer[3]);
+                        /*logSerial("Texte recu : %s", &buffer[3]);
+                        snprintf(message.msg, sizeof(message.msg), "%s", &buffer[3]);
+                        xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
+                    }
+                    else
+                    {
+                        Serial.println("Test ko");
+                    }
                 }
                 else if (buffer[0] == 'M' && isValidPayload(&buffer[1]))
                 {
@@ -402,7 +423,7 @@ void taskGestionLcd(void *pvParameters)
 
             RTC_TimeTypeDef TimeStruct;
             M5.Rtc.GetTime(&TimeStruct);
-            snprintf(displayBuffer[3], sizeof(displayBuffer[3]), "[%02d:%02d:%02d] %s", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, msg.msg);
+            snprintf(displayBuffer[3], sizeof(displayBuffer[3]), "[%02d:%02d:%02d] / %s", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, msg.msg);
 
             M5.Lcd.setTextColor(C_WHITE, C_GREY);
             M5.Lcd.setTextSize(2);

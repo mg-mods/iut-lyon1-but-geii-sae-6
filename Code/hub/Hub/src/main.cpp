@@ -72,6 +72,7 @@ Button *bOpt6 = nullptr;
 
 static QueueHandle_t queueReceptionSerie;
 static QueueHandle_t queueAffichage;
+char displayBuffer[4][64]; // Buffer pour les 4 lignes
 
 void Serial_callback()
 {
@@ -252,6 +253,17 @@ void drawHome()
 
     M5.Lcd.fillRoundRect(MGN, R1_Y, W - (MGN * 2), R1_H, R1_R, C_GREY);
 
+    M5.Lcd.setTextColor(C_WHITE, C_GREY);
+    M5.Lcd.setTextSize(2); // Taille standard lisible
+    M5.Lcd.setTextFont(1); // Police par défaut pour éviter les conflits avec FreeFonts
+
+    for (int i = 0; i < 4; i++)
+    {
+        int y = (i + 1) * Ecart_Text + 75;
+        M5.Lcd.setCursor(20, y);
+        M5.Lcd.print(displayBuffer[i]);
+    }
+
     M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
     M5.Lcd.setTextColor(C_WHITE, C_RED);
     M5.Lcd.setTextDatum(BC_DATUM);
@@ -321,6 +333,8 @@ void setup()
     M5.begin();
     Serial2.begin(9600, SERIAL_8N1, 13, 14);
     logSerial("Initialise");
+    for (int i = 0; i < 4; i++)
+        displayBuffer[i][0] = '\0';
     setScreen(HOME);
 
     RTC_TimeTypeDef TimeStruct;
@@ -408,26 +422,24 @@ void logSerial(const char *format, ...)
 void taskGestionLcd(void *pvParameters)
 {
     t_message_lcd msg;
-    char displayBuffer[4][64]; // Buffer pour les 4 lignes
+    
     for (int i = 0; i < 4; i++) displayBuffer[i][0] = '\0';
 
     while (true)
     {
         if (xQueueReceive(queueAffichage, (void *)&msg, portMAX_DELAY))
         {
-            // Décalage des lignes (scrolling)
             strcpy(displayBuffer[0], displayBuffer[1]);
             strcpy(displayBuffer[1], displayBuffer[2]);
             strcpy(displayBuffer[2], displayBuffer[3]);
 
-            // Nouvelle ligne
             RTC_TimeTypeDef TimeStruct;
             M5.Rtc.GetTime(&TimeStruct);
             snprintf(displayBuffer[3], sizeof(displayBuffer[3]), "[%02d:%02d:%02d] %s", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, msg.msg);
 
             M5.Lcd.setTextColor(C_WHITE, C_GREY);
-            M5.Lcd.setTextSize(2); // Taille standard lisible
-            M5.Lcd.setTextFont(1); // Police par défaut pour éviter les conflits avec FreeFonts
+            M5.Lcd.setTextSize(2);
+            M5.Lcd.setTextFont(1);
 
             for (int i = 0; i < 4; i++)
             {

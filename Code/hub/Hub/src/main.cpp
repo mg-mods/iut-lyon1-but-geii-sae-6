@@ -38,7 +38,7 @@ constexpr int W = 320, H = 240;
 constexpr int HEADER_H = 50, MGN = 10, GAP = 10;
 constexpr int BTN_W = (W - (MGN * 2) - GAP) / 2;
 
-constexpr int R1_Y = 90, R1_H = 80, R1_R = 15;
+constexpr int R1_Y = 90, R1_H = 85, R1_R = 15;
 constexpr int R2_Y = 180, R2_H = 50, R2_R = 10;
 constexpr int C1_X = MGN, C2_X = MGN + BTN_W + GAP;
 
@@ -107,7 +107,6 @@ void taskTraiteTrame(void *pvParameters)
                 {
                     logSerial("Texte recu : %s", &buffer[1]); // Renvoie de la trame décodée
                     snprintf(message.msg, sizeof(message.msg), "%s", &buffer[1]);
-                    message.ligne = 0; // Non utilisé
 
                     xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
                 }
@@ -409,8 +408,8 @@ void logSerial(const char *format, ...)
 void taskGestionLcd(void *pvParameters)
 {
     t_message_lcd msg;
-    char displayBuffer[3][64]; // Buffer pour les 3 lignes
-    for (int i = 0; i < 3; i++) displayBuffer[i][0] = '\0';
+    char displayBuffer[4][64]; // Buffer pour les 4 lignes
+    for (int i = 0; i < 4; i++) displayBuffer[i][0] = '\0';
 
     while (true)
     {
@@ -419,17 +418,18 @@ void taskGestionLcd(void *pvParameters)
             // Décalage des lignes (scrolling)
             strcpy(displayBuffer[0], displayBuffer[1]);
             strcpy(displayBuffer[1], displayBuffer[2]);
+            strcpy(displayBuffer[2], displayBuffer[3]);
 
             // Nouvelle ligne
             RTC_TimeTypeDef TimeStruct;
             M5.Rtc.GetTime(&TimeStruct);
-            snprintf(displayBuffer[2], sizeof(displayBuffer[2]), "[%02d:%02d:%02d] %s", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, msg.msg);
+            snprintf(displayBuffer[3], sizeof(displayBuffer[3]), "[%02d:%02d:%02d] %s", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, msg.msg);
 
             M5.Lcd.setTextColor(C_WHITE, C_GREY);
             M5.Lcd.setTextSize(2); // Taille standard lisible
             M5.Lcd.setTextFont(1); // Police par défaut pour éviter les conflits avec FreeFonts
 
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 4; i++)
             {
                 int y = (i + 1) * Ecart_Text + 75;
                 M5.Lcd.fillRect(MGN + 5, y, W - (MGN * 2) - 10, Ecart_Text, C_GREY);

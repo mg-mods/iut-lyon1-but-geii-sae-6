@@ -11,8 +11,9 @@ constexpr uint16_t C_RED = 0xE8E4, C_GREEN = 0x07E0, C_DARKGREEN = 0x0546, C_BLU
 constexpr uint16_t C_WHITE = TFT_WHITE, C_RED1 = 0xFEBA, C_RED2 = 0xFD34, C_RED3 = 0xFB6D, C_RED4 = 0xF9C7, C_RED5 = 0xF800;
 constexpr uint16_t C_OPT = 0x18E3;
 const char *KEYBOARD_PWD = "1234567";
+const char *RFID_PWD = "1234567";
 
-// #define USE_SERIAL2 //Définir pour utiliser Serial2
+#define USE_SERIAL2 // Définir pour utiliser Serial2
 
 #ifdef USE_SERIAL2
 #define SysSerial Serial2
@@ -21,7 +22,7 @@ const char *KEYBOARD_PWD = "1234567";
 #endif
 
 void Serial_callback();
-void comparePwd(const char *PWD);
+String comparePwd(const char *PWD);
 void logSerial(const char *format, ...);
 void taskGestionLcd(void *pvParameters);
 
@@ -84,22 +85,6 @@ void Serial_callback()
     }
 }
 
-bool isValidPayload(const char *str)
-{
-    if (!str || *str == '\0')
-        return false;
-    while (*str)
-    {
-        char c = *str;
-        if (!isalnum(c) && c != ' ' && c != '_' && c != '!' && c != '?' && c != '.' && c != ',' && c != ';' && c != ':' && c != '\'' && (uint8_t)c < 128)
-        {
-            return false;
-        }
-        str++;
-    }
-    return true;
-}
-
 void taskTraiteTrame(void *pvParameters)
 {
     char buffer[TRAME_SIZE];
@@ -123,45 +108,38 @@ void taskTraiteTrame(void *pvParameters)
                     {
                         logSerial("E");
                     }
-                    else if (std::regex_match(std::string(buffer), std::regex("std/IDdigi/IDhub/AskLenghtMDP/0"))) //Demande longueur MDP
+                    else if (std::regex_match(std::string(buffer), std::regex("str/IDdigi/IDhub/AskLenghtMDP/0"))) // Demande longueur MDP
                     {
                         logSerial("Demande longueur MDP");
+
                         String lstr = String((int)strlen(KEYBOARD_PWD));
-                        Serial.println("str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "LenghtMDP" + "/" + lstr);
                         logSerial("%s", lstr);
+
                         snprintf(message.msg, TRAME_SIZE, "Demande MDP");
                         xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+
+                        Serial2.println("str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "LenghtMDP" + "/" + lstr);
                     }
-                    else if (std::regex_match(std::string(buffer), std::regex("std/IDdigi/IDhub/VerifPWD/[0-9]{1,9}"))) //Demande vérifier MDP
+                    else if (std::regex_match(std::string(buffer), std::regex("str/IDdigi/IDhub/MDPInput/[0-9]{1,9}"))) // Demande vérifier MDP
                     {
                         Serial.println("Demande verif MDP");
 
                         char *pwd = strrchr(buffer, '/') + 1;
 
                         snprintf(message.msg, TRAME_SIZE, "Compare MDP");
-                        comparePwd(pwd);
                         xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
-                    }
-                    else if (buffer[0] == 'M' && isValidPayload(&buffer[1]))
-                    {
-                        Serial.println(buffer);
-                        if (strcmp(buffer, "M1111111") == 0)
-                        {
-                            Serial2.print("TRUE");
-                            Serial.println("TRUE");
-                        }
-                        else
-                        {
-                            Serial2.print("FALSE");
-                            Serial.println("FALSE");
-                        }
+
+                        String verif = comparePwd(pwd);
+
+                        Serial2.println("str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "StatePass" + "/" + verif);
                     }
                     else
                     {
-                        logSerial("ERROR");
+                        logSerial("ERREUR");
+                        logSerial(buffer);
                     }
+                    i = 0;
                 }
-                i = 0;
             }
             else
             {
@@ -394,18 +372,20 @@ void loop()
     }
 }
 
-void comparePwd(const char *PWD)
+String comparePwd(const char *PWD)
 {
+    String verif;
     if (strcmp(PWD, KEYBOARD_PWD) == 0)
     {
-        Serial2.print("TRUE");
-        Serial.println("TRUE");
+        verif = "true";
+        Serial.println("true");
     }
     else
     {
-        Serial2.print("FALSE");
-        Serial.println("FALSE");
+        verif = "false";
+        Serial.println("false");
     }
+    return verif;
 }
 
 void logSerial(const char *format, ...)

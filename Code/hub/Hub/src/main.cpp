@@ -86,11 +86,54 @@ void Serial_callback()
     }
 }
 
+void handleAskLenghtMDP(const String &IDhub, const String &IDdigi)
+{
+    logSerial("Demande longueur MDP");
+
+    String lstr = String((int)strlen(KEYBOARD_PWD));
+    logSerial("%s", lstr);
+
+    t_message_lcd message;
+    snprintf(message.msg, TRAME_SIZE, "Demande MDP");
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/LenghtMDP/" + lstr);
+}
+
+void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
+{
+    Serial.println("Demande verif MDP");
+
+    char *pwd = strrchr(buffer, '/') + 1;
+
+    t_message_lcd message;
+    snprintf(message.msg, TRAME_SIZE, "Compare MDP");
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+
+    String verif = comparePwd(pwd);
+
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + verif);
+}
+
+void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
+{
+    Serial.println("Demande verif RFID");
+
+    char *rfid = strrchr(buffer, '/') + 1;
+
+    t_message_lcd message;
+    snprintf(message.msg, TRAME_SIZE, "Compare RFID");
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+
+    String verif = compareRfid(rfid);
+
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateRFID/" + verif);
+}
+
 void taskTraiteTrame(void *pvParameters)
 {
     char buffer[TRAME_SIZE];
     uint8_t i = 0;
-    t_message_lcd message;
 
     const String IDdigi = "IDdigi";
     const String IDhub = "IDhub";
@@ -111,41 +154,15 @@ void taskTraiteTrame(void *pvParameters)
                     }
                     else if (std::regex_match(std::string(buffer), std::regex("str/IDdigi/IDhub/AskLenghtMDP/0"))) // Demande longueur MDP
                     {
-                        logSerial("Demande longueur MDP");
-
-                        String lstr = String((int)strlen(KEYBOARD_PWD));
-                        logSerial("%s", lstr);
-
-                        snprintf(message.msg, TRAME_SIZE, "Demande MDP");
-                        xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
-
-                        Serial2.println("str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "LenghtMDP" + "/" + lstr);
+                        handleAskLenghtMDP(IDhub, IDdigi);
                     }
                     else if (std::regex_match(std::string(buffer), std::regex("str/IDdigi/IDhub/MDPInput/[0-9]{1,9}"))) // Demande vérifier MDP
                     {
-                        Serial.println("Demande verif MDP");
-
-                        char *pwd = strrchr(buffer, '/') + 1;
-
-                        snprintf(message.msg, TRAME_SIZE, "Compare MDP");
-                        xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
-
-                        String verif = comparePwd(pwd);
-
-                        Serial2.println("str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "StatePass" + "/" + verif);
+                        handleMDPInput(buffer, IDhub, IDdigi);
                     }
                     else if (std::regex_match(std::string(buffer), std::regex("str/IDdigi/IDhub/RFIDInput/[ ,a-z,A-Z,0-9]{12}"))) // Demande vérifier RFID
                     {
-                        Serial.println("Demande verif RFID");
-
-                        char *rfid = strrchr(buffer, '/') + 1;
-
-                        snprintf(message.msg, TRAME_SIZE, "Compare RFID");
-                        xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
-
-                        String verif = compareRfid(rfid);
-
-                        Serial2.println("str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "StateRFID" + "/" + verif);
+                        handleRFIDInput(buffer, IDhub, IDdigi);
                     }
                     else
                     {

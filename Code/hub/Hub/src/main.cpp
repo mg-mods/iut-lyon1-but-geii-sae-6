@@ -11,7 +11,7 @@ constexpr uint16_t C_RED = 0xE8E4, C_GREEN = 0x07E0, C_DARKGREEN = 0x0546, C_BLU
 constexpr uint16_t C_WHITE = TFT_WHITE, C_RED1 = 0xFEBA, C_RED2 = 0xFD34, C_RED3 = 0xFB6D, C_RED4 = 0xF9C7, C_RED5 = 0xF800;
 constexpr uint16_t C_OPT = 0x18E3;
 const char *KEYBOARD_PWD = "1234567";
-const char *RFID_PWD = "1234567";
+const char *RFID_PWD = " 39 72 34 94";
 
 #define USE_SERIAL2 // Définir pour utiliser Serial2
 
@@ -23,6 +23,7 @@ const char *RFID_PWD = "1234567";
 
 void Serial_callback();
 String comparePwd(const char *PWD);
+String compareRfid(const char *RFID);
 void logSerial(const char *format, ...);
 void taskGestionLcd(void *pvParameters);
 
@@ -132,6 +133,19 @@ void taskTraiteTrame(void *pvParameters)
                         String verif = comparePwd(pwd);
 
                         Serial2.println("str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "StatePass" + "/" + verif);
+                    }
+                    else if (std::regex_match(std::string(buffer), std::regex("str/IDdigi/IDhub/RFIDInput/[ ,a-z,A-Z,0-9]{12}"))) // Demande vérifier RFID
+                    {
+                        Serial.println("Demande verif RFID");
+
+                        char *rfid = strrchr(buffer, '/') + 1;
+
+                        snprintf(message.msg, TRAME_SIZE, "Compare RFID");
+                        xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+
+                        String verif = compareRfid(rfid);
+
+                        Serial2.println("str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "StateRFID" + "/" + verif);
                     }
                     else
                     {
@@ -376,6 +390,22 @@ String comparePwd(const char *PWD)
 {
     String verif;
     if (strcmp(PWD, KEYBOARD_PWD) == 0)
+    {
+        verif = "true";
+        Serial.println("true");
+    }
+    else
+    {
+        verif = "false";
+        Serial.println("false");
+    }
+    return verif;
+}
+
+String compareRfid(const char *RFID)
+{
+    String verif;
+    if (strcmp(RFID, RFID_PWD) == 0)
     {
         verif = "true";
         Serial.println("true");

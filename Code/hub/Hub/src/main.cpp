@@ -23,6 +23,7 @@ const char *KEYBOARD_PWD = "1234567";
 void Serial_callback();
 void comparePwd(const char *PWD);
 void logSerial(const char *format, ...);
+void taskGestionLcd(void *pvParameters);
 
 constexpr int TRAME_SIZE = 128;
 constexpr int Ecart_Text = 20;
@@ -122,13 +123,16 @@ void taskTraiteTrame(void *pvParameters)
                     {
                         logSerial("E");
                     }
-                    else if (std::regex_match(std::string(buffer), std::regex("std/IDdigi/IDhub/ASKLenght/0000"))) //Demande longueur MDP
+                    else if (std::regex_match(std::string(buffer), std::regex("std/IDdigi/IDhub/AskLenghtMDP/0"))) //Demande longueur MDP
                     {
-                        Serial.println("Demande longueur MDP");
+                        logSerial("Demande longueur MDP");
+                        String lstr = String((int)strlen(KEYBOARD_PWD));
+                        Serial.println("str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "LenghtMDP" + "/" + lstr);
+                        logSerial("%s", lstr);
                         snprintf(message.msg, TRAME_SIZE, "Demande MDP");
                         xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
                     }
-                    else if (std::regex_match(std::string(buffer), std::regex("std/IDdigi/IDhub/VerifPWD/[0-9]{1,9}"))) //Demande longueur MDP
+                    else if (std::regex_match(std::string(buffer), std::regex("std/IDdigi/IDhub/VerifPWD/[0-9]{1,9}"))) //Demande vérifier MDP
                     {
                         Serial.println("Demande verif MDP");
 
@@ -414,7 +418,7 @@ void logSerial(const char *format, ...)
 
     RTC_TimeTypeDef TimeStruct;
     M5.Rtc.GetTime(&TimeStruct);
-    SysSerial.printf("[%02d:%02d:%02d] %s\n", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, buffer);
+    Serial.printf("[%02d:%02d:%02d] %s\n", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, buffer);
 }
 
 void taskGestionLcd(void *pvParameters)

@@ -1,0 +1,529 @@
+#include <M5Unified.h>
+#include <driver/dac.h>
+#include <SPI.h>
+#include <MFRC522.h>
+#include "Vogitek_Logo.h"
+
+#define RST_PIN 33
+#define SS_PIN 27
+
+#define Tx 14
+#define Rx 13
+// ====================== VARIABLES ======================
+
+String InputUser = "";
+String IDdigi = "IDdigi";
+String IDhub = "IDhub";
+String between = "";
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+
+// ====================== FREERTOS ======================
+
+enum EventType
+{
+  EVENT_GOOD,
+  EVENT_WRONG
+};
+
+QueueHandle_t queueSound;
+TaskHandle_t inputTaskHandle = NULL;
+
+// ====================== PROTOTYPES ======================
+
+void TaskInput(void *pvParameters);
+void TaskSound(void *pvParameters);
+void TaskSynch(void *pvParameters);
+
+void DrawButtons(void);
+void DrawButton(int x1, int y1, int x2, int y2);
+void DrawButtonPressed(int x1, int y1, int x2, int y2);
+void PressButton(int x1, int y1, int x2, int y2, String digit);
+void drawDigitNeon(int x, int y1, int num);
+void drawAllDigitNeon(void);
+void UpdateDigit(String text);
+void ShakeWrongPass(String text, int x, int y);
+void GoodPass(String text, int x, int y);
+void GoodSound(void);
+void WrongSound(void);
+
+// ====================== SETUP ======================
+
+void setup()
+{
+  M5.begin();
+  M5.Speaker.begin();
+  // Serial2.begin(9600, SERIAL_8N1, Rx, Tx); // serial2.println(string);    while(serial2.avaible)  serial2.read= string
+  Serial.begin(115200);
+  M5.Lcd.setRotation(2);
+
+  // Logo
+  M5.Lcd.fillScreen(BLACK);
+  M5.Lcd.setSwapBytes(true);
+  M5.Lcd.pushImage(0, 40, 240, 240, (uint16_t *)Vogitek_Logo, 0x0000);
+  delay(2000);
+  M5.Lcd.fillScreen(BLACK);
+
+  // RFID
+  SPI.begin(18, 38, 23, SS_PIN);
+
+  pinMode(RST_PIN, OUTPUT);
+  digitalWrite(RST_PIN, LOW);
+  delay(50);
+  digitalWrite(RST_PIN, HIGH);
+  delay(50);
+
+  mfrc522.PCD_Init();
+  delay(50);
+
+  // QUEUES
+  queueSound = xQueueCreate(5, sizeof(EventType));
+
+  // TASKS
+  xTaskCreatePinnedToCore(TaskSynch, "TaskSynch", 4096, NULL, 2, NULL, 1);
+  xTaskCreatePinnedToCore(TaskSound, "SoundTask", 2048, NULL, 1, NULL, 0);
+}
+
+void loop() {} // Vide, tout est en FreeRTOS
+
+// ====================== TASK SYNCH ======================
+
+void TaskSynch(void *pvParameters)
+{
+  // ====================== SYNCHRONISATION  ======================
+  // ----- Titre -----
+  M5.Display.setTextColor(TFT_WHITE);
+  M5.Display.setTextSize(3);
+  M5.Display.setCursor(80, 20);
+  M5.Display.print("Init");
+
+  // ----- Bouton Synchronisation -----
+  int btnX = 0;
+  int btnY = 120;
+  int btnW = 240;
+  int btnH = 60;
+  // ----- Bouton retry -----
+  int retryX = 60;
+  int retryY = 200;
+  int retryW = 120;
+  int retryH = 50;
+
+  M5.Display.fillRoundRect(btnX, btnY, btnW, btnH, 12, TFT_BLACK);
+  M5.Display.drawRoundRect(btnX, btnY, btnW, btnH, 12, TFT_WHITE);
+
+  M5.Display.setTextColor(TFT_WHITE);
+  M5.Display.setTextDatum(middle_center);
+  M5.Display.setTextSize(2);
+  M5.Display.drawString("Synchronisation",
+                        btnX + btnW / 2,
+                        btnY + btnH / 2);
+  /// connexion
+  bool synchON = false, Retry = false;
+  while (synchON != true)
+  {
+    M5.update();
+    if (M5.Touch.getCount() > 0)
+    {
+      auto point = M5.Touch.getDetail(0);
+      int tx = point.x;
+      int ty = point.y;
+      if ((tx >= 0 && tx <= 240) && (ty >= 120 && ty <= 180))
+      {
+        synchON = true;
+      }
+    }
+    vTaskDelay(20 / portTICK_PERIOD_MS);
+  }
+
+  M5.Display.fillRoundRect(btnX, btnY, btnW, btnH, 12, TFT_DARKGRAY);
+  M5.Display.drawRoundRect(btnX, btnY, btnW, btnH, 12, TFT_WHITE);
+  M5.Display.drawString("Synchronisation",
+                        btnX + btnW / 2,
+                        btnY + btnH / 2);
+  delay(500);
+  M5.Display.fillRoundRect(btnX, btnY, btnW, btnH, 12, TFT_BLACK);
+  M5.Display.drawString("Synchronisation.",
+                        btnX + btnW / 2,
+                        btnY + btnH / 2);
+
+  // envoie de la synchro
+  Serial.println("str/" + IDhub + "/" + IDdigi + "/AskLenghtMDP/0");
+
+  unsigned long startTime = millis(); // moment où la boucle commence
+  bool SynchOK = false;
+  String Dot;
+  unsigned long lastTime = 0;
+
+  while (SynchOK == false)
+  {
+    if (Serial.available() == 0)
+    {
+      unsigned long elapsed = millis() - startTime;
+
+      if (millis() - lastTime >= 800)
+      {
+        Dot += ".";
+        if (Dot.length() > 3)
+          Dot = ".";
+        lastTime = millis();
+
+        M5.Display.fillRoundRect(btnX, btnY, btnW, btnH, 12, TFT_BLACK);
+        M5.Display.drawString("Synchronisation" + Dot,
+                              btnX + btnW / 2,
+                              btnY + btnH / 2);
+      }
+
+      if (elapsed >= 10000)
+      {
+        M5.Display.fillRoundRect(btnX, btnY, btnW, btnH, 12, TFT_BLACK);
+        M5.Display.drawString("time out",
+                              btnX + btnW / 2,
+                              btnY + btnH / 2);
+
+        M5.Display.fillRoundRect(retryX, retryY, retryW, retryH, 10, TFT_DARKGRAY);
+        M5.Display.drawRoundRect(retryX, retryY, retryW, retryH, 10, TFT_WHITE);
+        M5.Display.drawString("Retry",
+                              retryX + retryW / 2,
+                              retryY + retryH / 2);
+
+        while (Retry == false)
+        {
+          M5.update();
+
+          if (M5.Touch.getCount() > 0)
+          {
+            auto p = M5.Touch.getDetail(0);
+
+            if (p.wasPressed())
+            {
+              int tx = p.x;
+              int ty = p.y;
+
+              if (tx >= retryX && tx <= retryX + retryW &&
+                  ty >= retryY && ty <= retryY + retryH)
+              {
+                // effet visuel
+                M5.Display.fillRoundRect(retryX, retryY, retryW, retryH, 10, TFT_LIGHTGREY);
+                M5.Display.drawRoundRect(retryX, retryY, retryW, retryH, 10, TFT_WHITE);
+                M5.Display.drawString("Retry",
+                                      retryX + retryW / 2,
+                                      retryY + retryH / 2);
+
+                vTaskDelay(300 / portTICK_PERIOD_MS);
+
+                Retry = true;
+              }
+            }
+          }
+
+          vTaskDelay(20 / portTICK_PERIOD_MS); // 🔥 laisse respirer FreeRTOS
+        }
+
+        // reset propre pour nouveau cycle
+        Retry = false;
+        startTime = millis();
+        lastTime = 0;
+        Dot = "";
+
+        M5.Display.fillRoundRect(retryX, retryY, retryW, retryH, 10, TFT_BLACK);
+        M5.Display.fillRoundRect(btnX, btnY, btnW, btnH, 12, TFT_BLACK);
+        M5.Display.drawString("Synchronisation.",
+                              btnX + btnW / 2,
+                              btnY + btnH / 2);
+
+        break; // 🔥 SORT de while(Serial.available()==0)
+      }
+
+      vTaskDelay(20 / portTICK_PERIOD_MS);
+    }
+    else
+    {
+      String line = Serial.readStringUntil('\n');
+      line.trim(); // enlève espaces et \r
+
+      String expected = "str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "LenghtMDP" + "/";
+
+      if (line.startsWith(expected))
+      {
+        between = line.substring(expected.length(), line.length());
+        SynchOK = true;
+      }
+    }
+  }
+
+  // 🔥 Lancement de TaskInput
+  xTaskCreatePinnedToCore(TaskInput, "InputTask", 4096, NULL, 2, &inputTaskHandle, 1);
+
+  // 🔥 Arrêt définitif de TaskSynch
+  vTaskDelete(NULL);
+}
+
+void TaskInput(void *pvParameters)
+{
+
+  // UI
+  M5.Lcd.fillScreen(TFT_DARKGREY);
+  M5.Lcd.setTextDatum(TL_DATUM);
+  DrawButtons();
+  drawAllDigitNeon();
+  while (true)
+  {
+    M5.update();
+
+    // ===== DIGICODE =====
+    if (InputUser.length() >= between.toInt())
+    {
+      EventType event;
+      Serial.println("str/" + IDhub + "/" + IDdigi + "/User/" + InputUser);
+      while (Serial.available() == 0)
+      {
+      }
+
+      String reception = Serial.readStringUntil('\n');
+      reception.trim(); // enlève espaces et \r
+      String FormatStatePass = "str/" + String(IDhub) + "/" + String(IDdigi) + "/" + "StatePass" + "/";
+      String StatPass = reception.substring(FormatStatePass.length(), reception.length());
+
+      if (StatPass == "true")
+      {
+
+        event = EVENT_GOOD;
+        xQueueSend(queueSound, &event, 0);
+        taskYIELD();
+        GoodPass(InputUser, 15, 15);
+      }
+      else
+      {
+        event = EVENT_WRONG;
+        xQueueSend(queueSound, &event, 0);
+        taskYIELD();
+        ShakeWrongPass(InputUser, 15, 15);
+      }
+
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+      InputUser = "";
+      UpdateDigit(InputUser);
+    }
+
+    // ===== TOUCH =====
+    if (M5.Touch.getCount() > 0)
+    {
+      auto point = M5.Touch.getDetail(0);
+
+      if (point.wasPressed())
+      {
+        int tx = point.x;
+        int ty = point.y;
+
+        if ((tx >= 7 && tx <= 77) && (ty >= 84 && ty <= 154))
+          PressButton(7, 84, 70, 70, "7");
+        else if ((tx >= 7 && tx <= 77) && (ty >= 162 && ty <= 232))
+          PressButton(7, 162, 70, 70, "4");
+        else if ((tx >= 7 && tx <= 77) && (ty >= 240 && ty <= 310))
+          PressButton(7, 240, 70, 70, "1");
+
+        else if ((tx >= 85 && tx <= 155) && (ty >= 84 && ty <= 154))
+          PressButton(85, 84, 70, 70, "8");
+        else if ((tx >= 85 && tx <= 155) && (ty >= 162 && ty <= 232))
+          PressButton(85, 162, 70, 70, "5");
+        else if ((tx >= 85 && tx <= 155) && (ty >= 240 && ty <= 310))
+          PressButton(85, 240, 70, 70, "2");
+
+        else if ((tx >= 163 && tx <= 233) && (ty >= 84 && ty <= 154))
+          PressButton(163, 84, 70, 70, "9");
+        else if ((tx >= 163 && tx <= 233) && (ty >= 162 && ty <= 232))
+          PressButton(163, 162, 70, 70, "6");
+        else if ((tx >= 163 && tx <= 233) && (ty >= 240 && ty <= 310))
+          PressButton(163, 240, 70, 70, "3");
+
+        UpdateDigit(InputUser);
+      }
+    }
+
+    // ===== RFID =====
+    if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial())
+    {
+      String uid = "";
+      for (byte i = 0; i < mfrc522.uid.size; i++)
+      {
+        uid += String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+        uid += String(mfrc522.uid.uidByte[i], HEX);
+      }
+      uid.toUpperCase();
+
+      EventType event;
+
+      if (uid == " 39 72 34 94")
+      {
+        event = EVENT_GOOD;
+        xQueueSend(queueSound, &event, 0);
+        taskYIELD();
+        GoodPass("OK", 95, 15);
+      }
+      else
+      {
+        event = EVENT_WRONG;
+        xQueueSend(queueSound, &event, 0);
+        taskYIELD();
+        ShakeWrongPass("Wrong", 50, 15);
+      }
+
+      mfrc522.PICC_HaltA();
+
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+      InputUser = "";
+      UpdateDigit(InputUser);
+    }
+
+    vTaskDelay(20 / portTICK_PERIOD_MS);
+  }
+}
+// ====================== TASK SOUND ======================
+
+void TaskSound(void *pvParameters)
+{
+  EventType event;
+
+  while (true)
+  {
+    if (xQueueReceive(queueSound, &event, portMAX_DELAY))
+    {
+      if (event == EVENT_GOOD)
+        GoodSound();
+      else
+        WrongSound();
+    }
+  }
+}
+
+// ====================== UI + EFFECTS ======================
+
+void PressButton(int x1, int y1, int x2, int y2, String digit)
+{
+  DrawButtonPressed(x1, y1, x2, y2);
+  vTaskDelay(50 / portTICK_PERIOD_MS);
+  DrawButton(x1, y1, x2, y2);
+  drawAllDigitNeon();
+
+  InputUser += digit;
+  M5.Speaker.tone(1500, 50);
+}
+
+void GoodPass(String text, int x, int y)
+{
+  M5.Lcd.fillRect(0, 0, 260, 60, TFT_DARKGREY);
+  M5.Lcd.setTextColor(GREEN);
+  M5.Lcd.setTextSize(5);
+  M5.Lcd.setCursor(x, y);
+  M5.Lcd.print(text);
+}
+
+void ShakeWrongPass(String text, int x, int y)
+{
+  int amplitude = 15;
+  int steps = 40;
+
+  for (int i = 0; i < steps; i++)
+  {
+    int dx = sin(i * 0.3) * amplitude;
+
+    M5.Lcd.fillRect(0, 0, 260, 60, TFT_DARKGREY);
+    M5.Lcd.setTextColor(RED);
+    M5.Lcd.setTextSize(5);
+    M5.Lcd.setCursor(x + dx, y);
+    M5.Lcd.print(text);
+
+    vTaskDelay(20 / portTICK_PERIOD_MS);
+  }
+}
+
+void GoodSound(void)
+{
+  M5.Speaker.tone(1000, 150);
+  vTaskDelay(150 / portTICK_PERIOD_MS);
+  M5.Speaker.tone(1200, 150);
+  vTaskDelay(150 / portTICK_PERIOD_MS);
+  M5.Speaker.tone(1400, 200);
+}
+
+void WrongSound(void)
+{ /*
+   M5.Speaker.tone(800, 200);
+   vTaskDelay(200 / portTICK_PERIOD_MS);
+   M5.Speaker.tone(600, 200);*/
+
+  M5.Speaker.tone(1400, 150);
+  vTaskDelay(150 / portTICK_PERIOD_MS);
+  M5.Speaker.tone(1200, 150);
+  vTaskDelay(150 / portTICK_PERIOD_MS);
+  M5.Speaker.tone(1000, 200);
+}
+void DrawButtonPressed(int x1, int y1, int x2, int y2)
+{
+  M5.Lcd.fillRect(x1, y1, x2, y2, TFT_NAVY);
+  M5.Lcd.drawRect(x1, y1, x2, y2, TFT_BLACK);
+  M5.Lcd.drawRect(x1 + 1, y1 + 1, x2 - 2, y2 - 2, TFT_BLACK);
+}
+
+void DrawButton(int x1, int y1, int x2, int y2)
+{
+  M5.Lcd.fillRect(x1, y1, x2, y2, TFT_BLUE);
+  M5.Lcd.drawRect(x1, y1, x2, y2, TFT_BLACK);
+  M5.Lcd.drawRect(x1 + 1, y1 + 1, x2 - 2, y2 - 2, TFT_NAVY);
+}
+
+void DrawButtons(void)
+{
+  int coords[36] = {
+      7, 84, 70, 70, 7, 162, 70, 70, 7, 240, 70, 70,
+      85, 84, 70, 70, 85, 162, 70, 70, 85, 240, 70, 70,
+      163, 84, 70, 70, 163, 162, 70, 70, 163, 240, 70, 70};
+
+  for (int i = 0; i < 36; i += 4)
+  {
+    DrawButton(coords[i], coords[i + 1], coords[i + 2], coords[i + 3]);
+  }
+}
+
+void drawDigitNeon(int x, int y1, int num)
+{
+  M5.Lcd.setTextSize(3);
+
+  int newX = y1;
+  int newY = 320 - x - 24;
+
+  M5.Lcd.setTextColor(TFT_CYAN);
+  M5.Lcd.setCursor(newX + 1, newY + 1);
+  M5.Lcd.print(num);
+
+  M5.Lcd.setTextColor(WHITE);
+  M5.Lcd.setCursor(newX, newY);
+  M5.Lcd.print(num);
+}
+
+void drawAllDigitNeon(void)
+{
+  drawDigitNeon(189, 34, 7);
+  drawDigitNeon(189, 112, 8);
+  drawDigitNeon(189, 190, 9);
+
+  drawDigitNeon(111, 34, 4);
+  drawDigitNeon(111, 112, 5);
+  drawDigitNeon(111, 190, 6);
+
+  drawDigitNeon(33, 34, 1);
+  drawDigitNeon(33, 112, 2);
+  drawDigitNeon(33, 190, 3);
+}
+
+void UpdateDigit(String text)
+{
+  M5.Lcd.fillRect(0, 0, 260, 60, TFT_DARKGREY);
+  M5.Lcd.setTextColor(WHITE);
+  M5.Lcd.setTextSize(5);
+  M5.Lcd.setCursor(15, 15);
+  M5.Lcd.print(text);
+  M5.Lcd.setTextSize(3);
+}

@@ -100,6 +100,19 @@ void handleAskLenghtMDP(const String &IDhub, const String &IDdigi)
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/LenghtMDP/" + lstr);
 }
 
+void handleAskStateAlarm(const String &IDhub, const String &IDdigi)
+{
+    logSerial("Demande etat alarme");
+
+    String stringLocked = locked ? "true" : "false";
+
+    t_message_lcd message;
+    snprintf(message.msg, TRAME_SIZE, "Demande State Alarm");
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
+}
+
 void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
 {
     Serial.println("Demande verif MDP");
@@ -110,7 +123,13 @@ void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
     snprintf(message.msg, TRAME_SIZE, "Compare MDP");
     xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
 
-    String verif = comparePwd(pwd);
+    String verif = comparePwd(pwd); //Remplacer les Strings par des bools ⚠️
+
+    if (verif == "true")
+    {
+        locked = false;
+        M5.update();
+    }
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + verif);
 }
@@ -138,6 +157,11 @@ void taskTraiteTrame(void *pvParameters)
     const String IDdigi = "IDdigi";
     const String IDhub = "IDhub";
 
+    static const std::regex re_ask_len("str/IDdigi/IDhub/AskLenghtMDP/0");
+    static const std::regex re_ask_state_alarm("str/IDdigi/IDhub/AskStateAlarm/0");
+    static const std::regex re_mdp_input("str/IDdigi/IDhub/MDPInput/[0-9]{1,9}");
+    static const std::regex re_rfid_input("str/IDdigi/IDhub/RFIDInput/[ ,a-z,A-Z,0-9]{12,21}");
+
     while (1)
     {
         if (xQueueReceive(queueReceptionSerie, (void *)&buffer[i], portMAX_DELAY))
@@ -152,15 +176,19 @@ void taskTraiteTrame(void *pvParameters)
                     {
                         logSerial("E");
                     }
-                    else if (std::regex_match(std::string(buffer), std::regex("str/IDdigi/IDhub/AskLenghtMDP/0"))) // Demande longueur MDP
+                    else if (std::regex_match(std::string(buffer), re_ask_len)) // Demande longueur MDP
                     {
                         handleAskLenghtMDP(IDhub, IDdigi);
                     }
-                    else if (std::regex_match(std::string(buffer), std::regex("str/IDdigi/IDhub/MDPInput/[0-9]{1,9}"))) // Demande vérifier MDP
+                    else if (std::regex_match(std::string(buffer), re_ask_state_alarm)) // Demande vérifier MDP
+                    {
+                        handleAskStateAlarm(IDhub, IDdigi);
+                    }
+                    else if (std::regex_match(std::string(buffer), re_mdp_input)) // Demande vérifier MDP
                     {
                         handleMDPInput(buffer, IDhub, IDdigi);
                     }
-                    else if (std::regex_match(std::string(buffer), std::regex("str/IDdigi/IDhub/RFIDInput/[ ,a-z,A-Z,0-9]{12}"))) // Demande vérifier RFID
+                    else if (std::regex_match(std::string(buffer), re_rfid_input)) // Demande vérifier RFID
                     {
                         handleRFIDInput(buffer, IDhub, IDdigi);
                     }
@@ -236,7 +264,7 @@ void drawHome()
     M5.Lcd.fillScreen(C_BG);
     M5.Lcd.fillRect(0, 0, W, HEADER_H, hBg);
     M5.Lcd.setTextSize(1);
-    M5.Lcd.setFreeFont(&FreeSansBold18pt7b);
+    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
 
     if (locked)
     {
@@ -260,7 +288,7 @@ void drawHome()
         }
     }
 
-    M5.Lcd.setFreeFont(&FreeSans12pt7b);
+    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
     M5.Lcd.setTextColor(C_WHITE, C_BG);
     M5.Lcd.setTextDatum(TC_DATUM);
     M5.Lcd.drawString(locked ? "Alarme en cours" : "Historique mouvements :", W / 2, 60);
@@ -294,12 +322,12 @@ void drawOptions()
     M5.Lcd.fillRect(0, 0, W, HEADER_H, C_BLUE);
 
     M5.Lcd.setTextSize(1);
-    M5.Lcd.setFreeFont(&FreeSansBold18pt7b);
+    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
     M5.Lcd.setTextDatum(MC_DATUM);
     M5.Lcd.setTextColor(C_WHITE, C_BLUE);
-    M5.Lcd.drawString("Reglages", W / 2, HEADER_H / 2);
+    M5.Lcd.drawString("Options", W / 2, HEADER_H / 2);
 
-    M5.Lcd.setFreeFont(&FreeSans12pt7b);
+    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
 
     for (int i = 0; i < OPTION_COUNT; i++)
     {
@@ -367,7 +395,7 @@ void loop()
 
     if (currentScreen == HOME)
     {
-        if (bLock && bLock->wasPressed())
+        if (bLock && bLock->wasReleased())
         {
             logSerial("Alarme active !");
             if (!locked)
@@ -377,7 +405,7 @@ void loop()
             }
             animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
         }
-        if (bBlue && bBlue->wasPressed())
+        if (bBlue && bBlue->wasReleased())
         {
             animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
             setScreen(OPTIONS);
@@ -387,7 +415,7 @@ void loop()
     {
         for (int i = 0; i < OPTION_COUNT; i++)
         {
-            if (bOpts[i] && bOpts[i]->wasPressed())
+            if (bOpts[i] && bOpts[i]->wasReleased())
             {
                 if (i == 5)
                 {

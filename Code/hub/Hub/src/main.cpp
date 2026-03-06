@@ -10,7 +10,7 @@ constexpr uint16_t C_BG = TFT_BLACK;
 constexpr uint16_t C_RED = 0xE8E4, C_GREEN = 0x07E0, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
 constexpr uint16_t C_WHITE = TFT_WHITE, C_RED1 = 0xFEBA, C_RED2 = 0xFD34, C_RED3 = 0xFB6D, C_RED4 = 0xF9C7, C_RED5 = 0xF800;
 constexpr uint16_t C_OPT = 0x18E3;
-const char *KEYBOARD_PWD = "1234567";
+const char *KEYBOARD_PWD = "1111";
 const char *RFID_PWD = " 39 72 34 94";
 
 #define USE_SERIAL2 // Définir pour utiliser Serial2
@@ -65,16 +65,178 @@ enum Screen
     OPTIONS
 };
 
+void drawHome();
+void clearButtons();
+void initHomeButtons();
+void setScreen(Screen s);
+void initOptionsButtons();
+void drawOptions();
+void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi);
+void handleAskLenghtMDP(const String &IDhub, const String &IDdigi);
+void handleAskStateAlarm(const String &IDhub, const String &IDdigi);
+void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi);
+void taskTraiteTrame(void *pvParameters);
+void animateBtn(int x, int y, int w, int h, int r, uint16_t c);
+
 Screen currentScreen = HOME;
 bool locked = false;
 
 Button *bLock = nullptr;
 Button *bBlue = nullptr;
 Button *bOpts[OPTION_COUNT] = {nullptr};
+SemaphoreHandle_t lcdMutex = nullptr;
 
 static QueueHandle_t queueReceptionSerie;
 static QueueHandle_t queueAffichage;
 char displayBuffer[4][TRAME_SIZE];
+
+void drawHome()
+{
+    uint16_t hBg = locked ? C_RED : C_DARKGREEN;
+
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+    M5.Lcd.fillScreen(C_BG);
+    M5.Lcd.fillRect(0, 0, W, HEADER_H, hBg);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
+
+    if (locked)
+    {
+        M5.Lcd.setTextDatum(MC_DATUM);
+        M5.Lcd.setTextColor(C_WHITE, hBg);
+        M5.Lcd.drawString("Alarme Active", W / 2, HEADER_H / 2);
+    }
+    else
+    {
+        const char *parts[] = {"Alarme Conne", "c", "t", "e", "e", "+"};
+        uint16_t colors[] = {C_WHITE, C_RED1, C_RED2, C_RED3, C_RED4, C_RED5};
+        int startX = 1;
+        M5.Lcd.setTextDatum(ML_DATUM);
+
+        for (int i = 0; i < 6; i++)
+        {
+            M5.Lcd.setTextColor(colors[i], hBg);
+            int yPos = (i == 5) ? 22 : 24;
+            M5.Lcd.drawString(parts[i], startX, yPos);
+            startX += M5.Lcd.textWidth(parts[i]);
+        }
+    }
+
+    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
+    M5.Lcd.setTextColor(C_WHITE, C_BG);
+    M5.Lcd.setTextDatum(TC_DATUM);
+    M5.Lcd.drawString(locked ? "Alarme en cours" : "Historique mouvements :", W / 2, 60);
+
+    M5.Lcd.fillRoundRect(MGN, R1_Y, W - (MGN * 2), R1_H, R1_R, C_GREY);
+    M5.Lcd.setTextColor(C_WHITE, C_GREY);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setTextFont(1);
+
+    for (int i = 0; i < 4; i++)
+    {
+        M5.Lcd.setCursor(20, (i + 1) * Ecart_Text + 75);
+        M5.Lcd.print(displayBuffer[i]);
+    }
+
+    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
+    M5.Lcd.setTextColor(C_WHITE, C_RED);
+    M5.Lcd.setTextDatum(BC_DATUM);
+    M5.Lcd.drawString("Alarme", (C1_X + BTN_W / 2) + 25, 218);
+    M5.Lcd.pushImage((C1_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)siren, 0x0000);
+
+    M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
+    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
+    M5.Lcd.drawString("Options", (C2_X + BTN_W / 2) + 25, 218);
+    M5.Lcd.pushImage((C2_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)gear, 0x0000);
+    xSemaphoreGive(lcdMutex);
+}
+
+void clearButtons()
+{
+    if (bLock)
+    {
+        delete bLock;
+        bLock = nullptr;
+    }
+    if (bBlue)
+    {
+        delete bBlue;
+        bBlue = nullptr;
+    }
+
+    for (int i = 0; i < OPTION_COUNT; i++)
+    {
+        if (bOpts[i])
+        {
+            delete bOpts[i];
+            bOpts[i] = nullptr;
+        }
+    }
+}
+
+void initHomeButtons()
+{
+    clearButtons();
+    bLock = new Button(C1_X, R2_Y, BTN_W, R2_H, false, "L");
+    bBlue = new Button(C2_X, R2_Y, BTN_W, R2_H, false, "B");
+}
+
+void setScreen(Screen s)
+{
+    currentScreen = s;
+    if (s == HOME)
+    {
+        initHomeButtons();
+        drawHome();
+    }
+    else
+    {
+        initOptionsButtons();
+        drawOptions();
+    }
+}
+
+void initOptionsButtons()
+{
+    clearButtons();
+    for (int i = 0; i < OPTION_COUNT; i++)
+    {
+        bOpts[i] = new Button(optX[i], optY[i], O_W, O_H, false, optNames[i]);
+    }
+}
+
+void drawOptions()
+{
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+    M5.Lcd.fillScreen(C_BG);
+    M5.Lcd.fillRect(0, 0, W, HEADER_H, C_BLUE);
+
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
+    M5.Lcd.drawString("Options", W / 2, HEADER_H / 2);
+
+    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
+
+    for (int i = 0; i < OPTION_COUNT; i++)
+    {
+        uint16_t btnColor = (i == 5) ? C_GREY : C_BLUE;
+        M5.Lcd.fillRoundRect(optX[i], optY[i], O_W, O_H, O_R, btnColor);
+        M5.Lcd.setTextColor(C_WHITE, btnColor);
+
+        if (i == 5)
+        {
+            M5.Lcd.drawString(optLabels[i], (optX[i] + O_W / 2) + 25, optY[i] + O_H / 2);
+            M5.Lcd.pushImage((optX[i] + (O_W - 50) / 2) - 43, optY[i] + (O_H - 50) / 2, 50, 50, (uint16_t *)exit_door, 0x0000);
+        }
+        else
+        {
+            M5.Lcd.drawString(optLabels[i], optX[i] + O_W / 2, optY[i] + O_H / 2);
+        }
+    }
+    xSemaphoreGive(lcdMutex);
+}
 
 void Serial_callback()
 {
@@ -84,6 +246,21 @@ void Serial_callback()
         c = SysSerial.read();
         xQueueSendToBack(queueReceptionSerie, (void *)&c, portMAX_DELAY);
     }
+}
+
+void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
+{
+    Serial.println("Demande verif RFID");
+
+    char *rfid = strrchr(buffer, '/') + 1;
+
+    t_message_lcd message;
+    snprintf(message.msg, TRAME_SIZE, "Compare RFID");
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+
+    String verif = compareRfid(rfid);
+
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateRFID/" + verif);
 }
 
 void handleAskLenghtMDP(const String &IDhub, const String &IDdigi)
@@ -123,30 +300,17 @@ void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
     snprintf(message.msg, TRAME_SIZE, "Compare MDP");
     xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
 
-    String verif = comparePwd(pwd); //Remplacer les Strings par des bools ⚠️
+    String verif = comparePwd(pwd); // Remplacer les Strings par des bools ⚠️
 
-    if (verif == "true")
+    if (verif == "true" && locked)
     {
         locked = false;
-        M5.update();
+        setScreen(HOME);
+        //initHomeButtons();
+        //drawHome();
     }
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + verif);
-}
-
-void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
-{
-    Serial.println("Demande verif RFID");
-
-    char *rfid = strrchr(buffer, '/') + 1;
-
-    t_message_lcd message;
-    snprintf(message.msg, TRAME_SIZE, "Compare RFID");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
-
-    String verif = compareRfid(rfid);
-
-    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateRFID/" + verif);
 }
 
 void taskTraiteTrame(void *pvParameters)
@@ -211,160 +375,21 @@ void taskTraiteTrame(void *pvParameters)
     }
 }
 
-void clearButtons()
-{
-    if (bLock)
-    {
-        delete bLock;
-        bLock = nullptr;
-    }
-    if (bBlue)
-    {
-        delete bBlue;
-        bBlue = nullptr;
-    }
-
-    for (int i = 0; i < OPTION_COUNT; i++)
-    {
-        if (bOpts[i])
-        {
-            delete bOpts[i];
-            bOpts[i] = nullptr;
-        }
-    }
-}
-
 void animateBtn(int x, int y, int w, int h, int r, uint16_t c)
 {
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.drawRoundRect(x, y, w, h, r, C_WHITE);
+    xSemaphoreGive(lcdMutex);
     delay(100);
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.drawRoundRect(x, y, w, h, r, c);
-}
-
-void initHomeButtons()
-{
-    clearButtons();
-    bLock = new Button(C1_X, R2_Y, BTN_W, R2_H, false, "L");
-    bBlue = new Button(C2_X, R2_Y, BTN_W, R2_H, false, "B");
-}
-
-void initOptionsButtons()
-{
-    clearButtons();
-    for (int i = 0; i < OPTION_COUNT; i++)
-    {
-        bOpts[i] = new Button(optX[i], optY[i], O_W, O_H, false, optNames[i]);
-    }
-}
-
-void drawHome()
-{
-    uint16_t hBg = locked ? C_RED : C_DARKGREEN;
-
-    M5.Lcd.fillScreen(C_BG);
-    M5.Lcd.fillRect(0, 0, W, HEADER_H, hBg);
-    M5.Lcd.setTextSize(1);
-    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
-
-    if (locked)
-    {
-        M5.Lcd.setTextDatum(MC_DATUM);
-        M5.Lcd.setTextColor(C_WHITE, hBg);
-        M5.Lcd.drawString("Alarme Active", W / 2, HEADER_H / 2);
-    }
-    else
-    {
-        const char *parts[] = {"Alarme Conne", "c", "t", "e", "e", "+"};
-        uint16_t colors[] = {C_WHITE, C_RED1, C_RED2, C_RED3, C_RED4, C_RED5};
-        int startX = 1;
-        M5.Lcd.setTextDatum(ML_DATUM);
-
-        for (int i = 0; i < 6; i++)
-        {
-            M5.Lcd.setTextColor(colors[i], hBg);
-            int yPos = (i == 5) ? 22 : 24;
-            M5.Lcd.drawString(parts[i], startX, yPos);
-            startX += M5.Lcd.textWidth(parts[i]);
-        }
-    }
-
-    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
-    M5.Lcd.setTextColor(C_WHITE, C_BG);
-    M5.Lcd.setTextDatum(TC_DATUM);
-    M5.Lcd.drawString(locked ? "Alarme en cours" : "Historique mouvements :", W / 2, 60);
-
-    M5.Lcd.fillRoundRect(MGN, R1_Y, W - (MGN * 2), R1_H, R1_R, C_GREY);
-    M5.Lcd.setTextColor(C_WHITE, C_GREY);
-    M5.Lcd.setTextSize(2);
-    M5.Lcd.setTextFont(1);
-
-    for (int i = 0; i < 4; i++)
-    {
-        M5.Lcd.setCursor(20, (i + 1) * Ecart_Text + 75);
-        M5.Lcd.print(displayBuffer[i]);
-    }
-
-    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
-    M5.Lcd.setTextColor(C_WHITE, C_RED);
-    M5.Lcd.setTextDatum(BC_DATUM);
-    M5.Lcd.drawString("Alarme", (C1_X + BTN_W / 2) + 25, 218);
-    M5.Lcd.pushImage((C1_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)siren, 0x0000);
-
-    M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
-    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
-    M5.Lcd.drawString("Options", (C2_X + BTN_W / 2) + 25, 218);
-    M5.Lcd.pushImage((C2_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)gear, 0x0000);
-}
-
-void drawOptions()
-{
-    M5.Lcd.fillScreen(C_BG);
-    M5.Lcd.fillRect(0, 0, W, HEADER_H, C_BLUE);
-
-    M5.Lcd.setTextSize(1);
-    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
-    M5.Lcd.setTextDatum(MC_DATUM);
-    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
-    M5.Lcd.drawString("Options", W / 2, HEADER_H / 2);
-
-    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
-
-    for (int i = 0; i < OPTION_COUNT; i++)
-    {
-        uint16_t btnColor = (i == 5) ? C_GREY : C_BLUE;
-        M5.Lcd.fillRoundRect(optX[i], optY[i], O_W, O_H, O_R, btnColor);
-        M5.Lcd.setTextColor(C_WHITE, btnColor);
-
-        if (i == 5)
-        {
-            M5.Lcd.drawString(optLabels[i], (optX[i] + O_W / 2) + 25, optY[i] + O_H / 2);
-            M5.Lcd.pushImage((optX[i] + (O_W - 50) / 2) - 43, optY[i] + (O_H - 50) / 2, 50, 50, (uint16_t *)exit_door, 0x0000);
-        }
-        else
-        {
-            M5.Lcd.drawString(optLabels[i], optX[i] + O_W / 2, optY[i] + O_H / 2);
-        }
-    }
-}
-
-void setScreen(Screen s)
-{
-    currentScreen = s;
-    if (s == HOME)
-    {
-        initHomeButtons();
-        drawHome();
-    }
-    else
-    {
-        initOptionsButtons();
-        drawOptions();
-    }
+    xSemaphoreGive(lcdMutex);
 }
 
 void setup()
 {
     M5.begin();
+    lcdMutex = xSemaphoreCreateMutex();
     Serial2.begin(9600, SERIAL_8N1, 13, 14);
     logSerial("Initialise");
 
@@ -385,8 +410,8 @@ void setup()
     queueAffichage = xQueueCreate(3, sizeof(t_message_lcd));
     SysSerial.onReceive(Serial_callback);
 
-    xTaskCreatePinnedToCore(taskTraiteTrame, "traiteTrame", 8192, nullptr, 2, nullptr, 1);
-    xTaskCreatePinnedToCore(taskGestionLcd, "GestionLCD", 8192, nullptr, 2, nullptr, 1);
+    xTaskCreatePinnedToCore(taskTraiteTrame, "traiteTrame", 8192, nullptr, 2, nullptr, 0);
+    xTaskCreatePinnedToCore(taskGestionLcd, "GestionLCD", 8192, nullptr, 1, nullptr, 1);
 }
 
 void loop()
@@ -487,6 +512,7 @@ void taskGestionLcd(void *pvParameters)
     {
         if (xQueueReceive(queueAffichage, (void *)&msg, portMAX_DELAY))
         {
+            xSemaphoreTake(lcdMutex, portMAX_DELAY);
             strcpy(displayBuffer[0], displayBuffer[1]);
             strcpy(displayBuffer[1], displayBuffer[2]);
             strcpy(displayBuffer[2], displayBuffer[3]);
@@ -506,6 +532,7 @@ void taskGestionLcd(void *pvParameters)
                 M5.Lcd.setCursor(20, y);
                 M5.Lcd.print(displayBuffer[i]);
             }
+            xSemaphoreGive(lcdMutex);
         }
     }
 }

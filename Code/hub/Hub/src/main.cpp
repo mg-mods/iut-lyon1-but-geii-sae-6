@@ -510,7 +510,7 @@ void taskGestionLcd(void *pvParameters)
 
     while (true)
     {
-        if (xQueueReceive(queueAffichage, (void *)&msg, portMAX_DELAY))
+        if (xQueueReceive(queueAffichage, (void *)&msg, portMAX_DELAY) && currentScreen == HOME)
         {
             xSemaphoreTake(lcdMutex, portMAX_DELAY);
             strcpy(displayBuffer[0], displayBuffer[1]);

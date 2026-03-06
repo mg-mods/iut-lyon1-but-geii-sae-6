@@ -279,7 +279,7 @@ void handleAskLenghtMDP(const String &IDhub, const String &IDdigi)
 
 void handleAskStateAlarm(const String &IDhub, const String &IDdigi)
 {
-    logSerial("Demande etat alarme");
+    //logSerial("Demande etat alarme");
 
     String stringLocked = locked ? "true" : "false";
 
@@ -288,6 +288,7 @@ void handleAskStateAlarm(const String &IDhub, const String &IDdigi)
     xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
+    Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
 }
 
 void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
@@ -300,17 +301,17 @@ void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
     snprintf(message.msg, TRAME_SIZE, "Compare MDP");
     xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
 
-    String verif = comparePwd(pwd); // Remplacer les Strings par des bools ⚠️
+    String stringPWD = comparePwd(pwd);
 
-    if (verif == "true" && locked)
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateMDP/" + stringPWD);
+
+    if (stringPWD == "true" && locked)
     {
         locked = false;
         setScreen(HOME);
-        //initHomeButtons();
-        //drawHome();
     }
 
-    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + verif);
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
 }
 
 void taskTraiteTrame(void *pvParameters)
@@ -375,6 +376,16 @@ void taskTraiteTrame(void *pvParameters)
     }
 }
 
+void taskTraiteInput(void *pvParameters)
+{
+    while (true)
+    {
+        // En attente d'implémentation...
+        // vTaskDelay est nécessaire pour ne pas bloquer le Core 0 (Watchdog)
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
 void animateBtn(int x, int y, int w, int h, int r, uint16_t c)
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -410,8 +421,9 @@ void setup()
     queueAffichage = xQueueCreate(3, sizeof(t_message_lcd));
     SysSerial.onReceive(Serial_callback);
 
-    xTaskCreatePinnedToCore(taskTraiteTrame, "traiteTrame", 8192, nullptr, 2, nullptr, 0);
+    xTaskCreatePinnedToCore(taskTraiteTrame, "TraiteTrame", 8192, nullptr, 2, nullptr, 0);
     xTaskCreatePinnedToCore(taskGestionLcd, "GestionLCD", 8192, nullptr, 1, nullptr, 1);
+    xTaskCreatePinnedToCore(taskTraiteInput, "TraiteInput", 8192, nullptr, 2, nullptr, 0);
 }
 
 void loop()

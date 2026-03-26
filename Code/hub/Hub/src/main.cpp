@@ -65,8 +65,12 @@ const char *optLabels[OPTION_COUNT] = {"Wifi", "Son", "Ecran", "Journal", "Capte
 enum Screen
 {
     HOME,
-    OPTIONS
+    OPTIONS,
+    ALARM
 };
+
+void drawAlarm();
+void initAlarmButtons();
 
 void drawHome();
 void clearButtons();
@@ -193,10 +197,15 @@ void setScreen(Screen s)
         initHomeButtons();
         drawHome();
     }
-    else
+    else if (s == OPTIONS)
     {
         initOptionsButtons();
         drawOptions();
+    }
+    else if (s == ALARM)
+    {
+        initAlarmButtons();
+        drawAlarm();
     }
 }
 
@@ -252,7 +261,7 @@ void Serial_callback()
     }
 }
 
-void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi) //* Compare le RFID reçu avec celui de la BDD
+void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
 {
     Serial.println("Demande verif RFID");
 
@@ -267,6 +276,28 @@ void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi) //
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateRFID/" + verif);
 
     if (verif == "true")
+    {
+        locked = !locked;
+        setScreen(HOME);
+    }
+}
+
+void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
+{
+    Serial.println("Demande verif MDP");
+
+    char *pwd = strrchr(buffer, '/') + 1;
+
+    t_message_lcd message;
+    snprintf(message.msg, TRAME_SIZE, "Compare MDP");
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+
+    String stringPWD = comparePwd(pwd);
+
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
+    //Serial.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
+
+    if (stringPWD == "true")
     {
         locked = !locked;
         setScreen(HOME);
@@ -298,29 +329,7 @@ void handleAskStateAlarm(const String &IDhub, const String &IDdigi) //* Renvoi l
     xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
-    //Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
-}
-
-void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi) //* Compare le MDP reçu avec celui de la BDD
-{
-    Serial.println("Demande verif MDP");
-
-    char *pwd = strrchr(buffer, '/') + 1;
-
-    t_message_lcd message;
-    snprintf(message.msg, TRAME_SIZE, "Compare MDP");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
-
-    String stringPWD = comparePwd(pwd);
-
-    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
-    Serial.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
-
-    if (stringPWD == "true")
-    {
-        locked = !locked;
-        setScreen(HOME);
-    }
+    // Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
 }
 
 void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réceptions série
@@ -385,41 +394,53 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
     }
 }
 
-void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs d'entrées
+void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
 {
     pinMode(19, INPUT);
     bool isImagePush = false;
+    bool isAlreadyDetected = false;
+    
     while (1)
     {
-        if (digitalRead(sensor1) != 1)
+        if (digitalRead(sensor1) != 1) //* Si un capteur detecte un mvt
         {
-            logSerial("Presence detectee");
 
-            t_message_lcd message;
-            snprintf(message.msg, TRAME_SIZE, "Presence detectee");
-            xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+            if (isAlreadyDetected == false) //* N'affiche le message de detection qu'une fois
+            {
+                logSerial("Mvt detectee");
+                t_message_lcd message;
+                snprintf(message.msg, TRAME_SIZE, "Mvt detectee");
+                xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+                isAlreadyDetected = true;
+            }
 
             vTaskDelay(pdMS_TO_TICKS(50));
+            if (currentScreen != ALARM) //* Afficher le logo de mvt
+            {
+                xSemaphoreTake(lcdMutex, portMAX_DELAY);
+                M5.Lcd.pushImage(10, 57, 25, 25, (uint16_t *)motion_detector, 0x0000);
+                isImagePush = true;
+                xSemaphoreGive(lcdMutex);
+            }
 
-            xSemaphoreTake(lcdMutex, portMAX_DELAY);
-            M5.Lcd.pushImage(10, 57, 25, 25, (uint16_t *)motion_detector, 0x0000);
-            isImagePush = true;
-            xSemaphoreGive(lcdMutex);
+            if (locked == true && currentScreen != ALARM) //* Mettre l'ecran d'alarme
+            {
+                setScreen(ALARM);
+            }
 
-            delay(2000);
+            delay(100);
         }
         else
         {
-            if (isImagePush == true)
+            if (isImagePush == true && currentScreen != ALARM)
             {
                 xSemaphoreTake(lcdMutex, portMAX_DELAY);
-                // Au lieu de tout redessiner, on efface juste la zone de l'image (50x50 à partir de 0,45)
-                // L'image mord de 5 pixels sur le header, on restaure donc ces 5 pixels
                 uint16_t hBg = locked ? C_RED : C_DARKGREEN;
-                M5.Lcd.fillRect(0, 55, 35, 35, C_BG); // Et les 45 pixels restants sur le fond
+                M5.Lcd.fillRect(0, 55, 35, 35, C_BG);
                 isImagePush = false;
                 xSemaphoreGive(lcdMutex);
             }
+            isAlreadyDetected = false;
 
             vTaskDelay(pdMS_TO_TICKS(10));
         }
@@ -596,4 +617,25 @@ void taskGestionLcd(void *pvParameters)
             xSemaphoreGive(lcdMutex);
         }
     }
+}
+
+void initAlarmButtons()
+{
+    clearButtons();
+}
+
+void drawAlarm()
+{
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+    M5.Lcd.fillScreen(C_RED);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
+    M5.Lcd.setTextDatum(MC_DATUM);
+
+    M5.Lcd.setTextColor(C_WHITE, C_RED);
+    M5.Lcd.drawString("INTRUSION", W / 2, H / 2 - 20);
+    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
+    M5.Lcd.drawString("Desactivation requise", W / 2, H / 2 + 30);
+    M5.Lcd.pushImage((W - 50) / 2, 20, 50, 50, (uint16_t *)siren, 0x0000);
+    xSemaphoreGive(lcdMutex);
 }

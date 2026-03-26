@@ -10,8 +10,11 @@ constexpr uint16_t C_BG = TFT_BLACK;
 constexpr uint16_t C_RED = 0xE8E4, C_GREEN = 0x07E0, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
 constexpr uint16_t C_WHITE = TFT_WHITE, C_RED1 = 0xFEBA, C_RED2 = 0xFD34, C_RED3 = 0xFB6D, C_RED4 = 0xF9C7, C_RED5 = 0xF800;
 constexpr uint16_t C_OPT = 0x18E3;
+
 const char *KEYBOARD_PWD = "1111";
 const char *RFID_PWD = " 39 72 34 94";
+
+uint8_t sensor1 = 19;
 
 #define USE_SERIAL2 // Définir pour utiliser Serial2
 
@@ -76,6 +79,7 @@ void handleAskLenghtMDP(const String &IDhub, const String &IDdigi);
 void handleAskStateAlarm(const String &IDhub, const String &IDdigi);
 void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi);
 void taskTraiteTrame(void *pvParameters);
+void taskTraiteSensor(void *pvParameters);
 void animateBtn(int x, int y, int w, int h, int r, uint16_t c);
 
 Screen currentScreen = HOME;
@@ -303,15 +307,14 @@ void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
 
     String stringPWD = comparePwd(pwd);
 
-    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateMDP/" + stringPWD);
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
+    Serial.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
 
     if (stringPWD == "true" && locked)
     {
         locked = false;
         setScreen(HOME);
     }
-
-    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
 }
 
 void taskTraiteTrame(void *pvParameters)
@@ -376,21 +379,29 @@ void taskTraiteTrame(void *pvParameters)
     }
 }
 
-void taskTraiteInput(void *pvParameters)
-{
-    while (true)
-    {
-        // En attente d'implémentation...
-        // vTaskDelay est nécessaire pour ne pas bloquer le Core 0 (Watchdog)
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
-
 void taskTraiteSensor(void *pvParameters)
 {
-    while (true)
+    pinMode(19, INPUT);
+    while (1)
     {
-        
+        if (digitalRead(sensor1) != 1)
+        {
+            logSerial("Présence détectée");
+
+            t_message_lcd message;
+            snprintf(message.msg, TRAME_SIZE, "Présence détectée");
+            xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+            
+            vTaskDelay(pdMS_TO_TICKS(50));
+
+            xSemaphoreTake(lcdMutex, portMAX_DELAY);
+            M5.Lcd.pushImage(50, 50, 50, 50, (uint16_t *)motion_detector, 0x0000);
+            xSemaphoreGive(lcdMutex);
+
+            delay(2000);
+        }else{
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
     }
 }
 
@@ -412,8 +423,6 @@ void setup()
     Serial2.begin(9600, SERIAL_8N1, 13, 14);
     logSerial("Initialise");
 
-    pinMode(19, INPUT);
-
     for (int i = 0; i < 4; i++)
     {
         displayBuffer[i][0] = '\0';
@@ -433,8 +442,7 @@ void setup()
 
     xTaskCreatePinnedToCore(taskTraiteTrame, "TraiteTrame", 8192, nullptr, 2, nullptr, 0);
     xTaskCreatePinnedToCore(taskGestionLcd, "GestionLCD", 8192, nullptr, 1, nullptr, 1);
-    xTaskCreatePinnedToCore(taskTraiteInput, "TraiteInput", 8192, nullptr, 2, nullptr, 0);
-    xTaskCreatePinnedToCore(taskTraiteSensor, "TraiteSensor", 8192, nullptr, 2, nullptr, 0);
+    xTaskCreatePinnedToCore(taskTraiteSensor, "TraiteSensor", 8192, nullptr, 3, nullptr, 0);
 }
 
 void loop()

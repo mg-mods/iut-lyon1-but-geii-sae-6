@@ -279,16 +279,16 @@ void handleAskLenghtMDP(const String &IDhub, const String &IDdigi)
 
 void handleAskStateAlarm(const String &IDhub, const String &IDdigi)
 {
-    //logSerial("Demande etat alarme");
+    // logSerial("Demande etat alarme");
 
     String stringLocked = locked ? "true" : "false";
 
-    t_message_lcd message;
+    /*t_message_lcd message;
     snprintf(message.msg, TRAME_SIZE, "Demande State Alarm");
     xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
-    Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
+    Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);*/
 }
 
 void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
@@ -386,6 +386,14 @@ void taskTraiteInput(void *pvParameters)
     }
 }
 
+void taskTraiteSensor(void *pvParameters)
+{
+    while (true)
+    {
+        
+    }
+}
+
 void animateBtn(int x, int y, int w, int h, int r, uint16_t c)
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -404,6 +412,8 @@ void setup()
     Serial2.begin(9600, SERIAL_8N1, 13, 14);
     logSerial("Initialise");
 
+    pinMode(19, INPUT);
+
     for (int i = 0; i < 4; i++)
     {
         displayBuffer[i][0] = '\0';
@@ -412,7 +422,7 @@ void setup()
     setScreen(HOME);
 
     RTC_TimeTypeDef TimeStruct;
-    TimeStruct.Hours = 16;
+    TimeStruct.Hours = 9;
     TimeStruct.Minutes = 26;
     TimeStruct.Seconds = 47;
     M5.Rtc.SetTime(&TimeStruct);
@@ -424,6 +434,7 @@ void setup()
     xTaskCreatePinnedToCore(taskTraiteTrame, "TraiteTrame", 8192, nullptr, 2, nullptr, 0);
     xTaskCreatePinnedToCore(taskGestionLcd, "GestionLCD", 8192, nullptr, 1, nullptr, 1);
     xTaskCreatePinnedToCore(taskTraiteInput, "TraiteInput", 8192, nullptr, 2, nullptr, 0);
+    xTaskCreatePinnedToCore(taskTraiteSensor, "TraiteSensor", 8192, nullptr, 2, nullptr, 0);
 }
 
 void loop()
@@ -466,6 +477,15 @@ void loop()
             }
         }
     }
+
+    /*if (digitalRead(19) == 1)
+    {
+        logSerial("OUI");
+        delay(1000);
+    }else{
+        logSerial("NON");
+        delay(1000);
+    }*/
 }
 
 String comparePwd(const char *PWD)

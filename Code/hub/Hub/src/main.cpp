@@ -94,7 +94,7 @@ static QueueHandle_t queueReceptionSerie;
 static QueueHandle_t queueAffichage;
 char displayBuffer[4][TRAME_SIZE];
 
-void drawHome()
+void drawHome() //* Affiche le menu home
 {
     uint16_t hBg = locked ? C_RED : C_DARKGREEN;
 
@@ -209,7 +209,7 @@ void initOptionsButtons()
     }
 }
 
-void drawOptions()
+void drawOptions() //* Affiche le menu options
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.fillScreen(C_BG);
@@ -252,7 +252,7 @@ void Serial_callback()
     }
 }
 
-void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
+void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi) //* Compare le RFID reçu avec celui de la BDD
 {
     Serial.println("Demande verif RFID");
 
@@ -265,9 +265,15 @@ void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
     String verif = compareRfid(rfid);
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateRFID/" + verif);
+
+    if (verif == "true")
+    {
+        locked = !locked;
+        setScreen(HOME);
+    }
 }
 
-void handleAskLenghtMDP(const String &IDhub, const String &IDdigi)
+void handleAskLenghtMDP(const String &IDhub, const String &IDdigi) //* Renvoie la longueur du MDP(int) sur demande
 {
     logSerial("Demande longueur MDP");
 
@@ -281,7 +287,7 @@ void handleAskLenghtMDP(const String &IDhub, const String &IDdigi)
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/LenghtMDP/" + lstr);
 }
 
-void handleAskStateAlarm(const String &IDhub, const String &IDdigi)
+void handleAskStateAlarm(const String &IDhub, const String &IDdigi) //* Renvoi l'état actuel de l'alarme(true/false) sur demande
 {
     // logSerial("Demande etat alarme");
 
@@ -289,13 +295,13 @@ void handleAskStateAlarm(const String &IDhub, const String &IDdigi)
 
     /*t_message_lcd message;
     snprintf(message.msg, TRAME_SIZE, "Demande State Alarm");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
-    Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);*/
+    //Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
 }
 
-void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
+void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi) //* Compare le MDP reçu avec celui de la BDD
 {
     Serial.println("Demande verif MDP");
 
@@ -310,14 +316,14 @@ void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
     Serial.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
 
-    if (stringPWD == "true" && locked)
+    if (stringPWD == "true")
     {
-        locked = false;
+        locked = !locked;
         setScreen(HOME);
     }
 }
 
-void taskTraiteTrame(void *pvParameters)
+void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réceptions série
 {
     char buffer[TRAME_SIZE];
     uint8_t i = 0;
@@ -379,33 +385,48 @@ void taskTraiteTrame(void *pvParameters)
     }
 }
 
-void taskTraiteSensor(void *pvParameters)
+void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs d'entrées
 {
     pinMode(19, INPUT);
+    bool isImagePush = false;
     while (1)
     {
         if (digitalRead(sensor1) != 1)
         {
-            logSerial("Présence détectée");
+            logSerial("Presence detectee");
 
             t_message_lcd message;
-            snprintf(message.msg, TRAME_SIZE, "Présence détectée");
+            snprintf(message.msg, TRAME_SIZE, "Presence detectee");
             xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
-            
+
             vTaskDelay(pdMS_TO_TICKS(50));
 
             xSemaphoreTake(lcdMutex, portMAX_DELAY);
-            M5.Lcd.pushImage(50, 50, 50, 50, (uint16_t *)motion_detector, 0x0000);
+            M5.Lcd.pushImage(10, 57, 25, 25, (uint16_t *)motion_detector, 0x0000);
+            isImagePush = true;
             xSemaphoreGive(lcdMutex);
 
             delay(2000);
-        }else{
+        }
+        else
+        {
+            if (isImagePush == true)
+            {
+                xSemaphoreTake(lcdMutex, portMAX_DELAY);
+                // Au lieu de tout redessiner, on efface juste la zone de l'image (50x50 à partir de 0,45)
+                // L'image mord de 5 pixels sur le header, on restaure donc ces 5 pixels
+                uint16_t hBg = locked ? C_RED : C_DARKGREEN;
+                M5.Lcd.fillRect(0, 55, 35, 35, C_BG); // Et les 45 pixels restants sur le fond
+                isImagePush = false;
+                xSemaphoreGive(lcdMutex);
+            }
+
             vTaskDelay(pdMS_TO_TICKS(10));
         }
     }
 }
 
-void animateBtn(int x, int y, int w, int h, int r, uint16_t c)
+void animateBtn(int x, int y, int w, int h, int r, uint16_t c) //* Mettre des animation lors de l'appui sur boutons
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.drawRoundRect(x, y, w, h, r, C_WHITE);
@@ -431,8 +452,8 @@ void setup()
     setScreen(HOME);
 
     RTC_TimeTypeDef TimeStruct;
-    TimeStruct.Hours = 9;
-    TimeStruct.Minutes = 26;
+    TimeStruct.Hours = 15;
+    TimeStruct.Minutes = 5;
     TimeStruct.Seconds = 47;
     M5.Rtc.SetTime(&TimeStruct);
 
@@ -496,7 +517,7 @@ void loop()
     }*/
 }
 
-String comparePwd(const char *PWD)
+String comparePwd(const char *PWD) //* Comparateur de MDP lancée par handleMDPInput
 {
     String verif;
     if (strcmp(PWD, KEYBOARD_PWD) == 0)
@@ -512,7 +533,7 @@ String comparePwd(const char *PWD)
     return verif;
 }
 
-String compareRfid(const char *RFID)
+String compareRfid(const char *RFID) //* Comparateur de RFID lancée par handleRFIDInput
 {
     String verif;
     if (strcmp(RFID, RFID_PWD) == 0)
@@ -528,7 +549,7 @@ String compareRfid(const char *RFID)
     return verif;
 }
 
-void logSerial(const char *format, ...)
+void logSerial(const char *format, ...) //* Renvoie un texte en serie vers le PC(USB) avec horodatage
 {
     char buffer[128];
     va_list args;

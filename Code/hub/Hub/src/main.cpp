@@ -4,6 +4,7 @@
 #include <string>
 #include <utility/In_eSPI.h>
 #include <regex>
+#include <Preferences.h>
 #include "images.h"
 
 constexpr uint16_t C_BG = TFT_BLACK;
@@ -16,6 +17,9 @@ const char *RFID_PWD = " 39 72 34 94";
 
 uint8_t sensor1 = 19;
 uint8_t alarmSiren = 27;
+uint8_t faceDetector1 = 18;
+uint8_t faceDetector2 = 38;
+bool RFIDEnabled = false;
 
 #define USE_SERIAL2 // Définir pour utiliser Serial2
 
@@ -90,6 +94,7 @@ void animateBtn(int x, int y, int w, int h, int r, uint16_t c);
 Screen currentScreen = HOME;
 bool locked = false;
 
+Preferences preferences;
 Button *bLock = nullptr;
 Button *bBlue = nullptr;
 Button *bOpts[OPTION_COUNT] = {nullptr};
@@ -296,7 +301,7 @@ void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
     String stringPWD = comparePwd(pwd);
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
-    //Serial.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
+    // Serial.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
 
     if (stringPWD == "true")
     {
@@ -399,12 +404,15 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
 {
     pinMode(sensor1, INPUT);
     pinMode(alarmSiren, OUTPUT);
+    pinMode(faceDetector1, INPUT);
+    pinMode(faceDetector2, INPUT);
+
     bool isImagePush = false;
     bool isAlreadyDetected = false;
-    
+
     while (1)
     {
-        if (digitalRead(sensor1) != 1) //* Si un capteur detecte un mvt
+        if (digitalRead(sensor1) != 1) //! Si un capteur detecte un mvt
         {
 
             if (isAlreadyDetected == false) //* N'affiche le message de detection qu'une fois
@@ -446,13 +454,25 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
 
             vTaskDelay(pdMS_TO_TICKS(10));
         }
-        if (currentScreen == ALARM)
+        if (currentScreen == ALARM) //! Gestion de la sirène lors de l'alarme intrusion
         {
             digitalWrite(alarmSiren, LOW);
             vTaskDelay(pdMS_TO_TICKS(100));
-        }else{
+        }
+        else
+        {
             digitalWrite(alarmSiren, HIGH);
             vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        if (digitalRead(faceDetector1) == 1 && digitalRead(faceDetector2) == 0) //! Gestion de la reconnaissance faciale
+        {
+            RFIDEnabled = true;
+            logSerial("Visage connu detectee");
+        }
+        if (RFIDEnabled == true)
+        {
+            delay(10000);
+            RFIDEnabled = false;
         }
     }
 }
@@ -471,7 +491,13 @@ void animateBtn(int x, int y, int w, int h, int r, uint16_t c) //* Mettre des an
 void setup()
 {
     M5.begin();
+
+    preferences.begin("preferences", false);
+
+    currentScreen = (Screen)preferences.getUInt("Screen", (uint32_t)HOME);
+
     lcdMutex = xSemaphoreCreateMutex();
+
     Serial2.begin(9600, SERIAL_8N1, 13, 14);
     logSerial("Initialise");
 
@@ -567,7 +593,7 @@ String comparePwd(const char *PWD) //* Comparateur de MDP lancée par handleMDPI
 String compareRfid(const char *RFID) //* Comparateur de RFID lancée par handleRFIDInput
 {
     String verif;
-    if (strcmp(RFID, RFID_PWD) == 0)
+    if (strcmp(RFID, RFID_PWD) == 0 && RFIDEnabled == true)
     {
         verif = "true";
         Serial.println("true");

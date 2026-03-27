@@ -15,6 +15,7 @@ const char *KEYBOARD_PWD = "1111";
 const char *RFID_PWD = " 39 72 34 94";
 
 uint8_t sensor1 = 19;
+uint8_t alarmSiren = 27;
 
 #define USE_SERIAL2 // Définir pour utiliser Serial2
 
@@ -396,7 +397,8 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
 
 void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
 {
-    pinMode(19, INPUT);
+    pinMode(sensor1, INPUT);
+    pinMode(alarmSiren, OUTPUT);
     bool isImagePush = false;
     bool isAlreadyDetected = false;
     
@@ -443,6 +445,14 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
             isAlreadyDetected = false;
 
             vTaskDelay(pdMS_TO_TICKS(10));
+        }
+        if (currentScreen == ALARM)
+        {
+            digitalWrite(alarmSiren, LOW);
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }else{
+            digitalWrite(alarmSiren, HIGH);
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
 }

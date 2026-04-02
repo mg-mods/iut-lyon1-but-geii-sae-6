@@ -9,7 +9,7 @@
 #include <FastLED.h>
 
 constexpr uint16_t C_BG = TFT_BLACK;
-constexpr uint16_t C_RED = 0xE8E4, C_ORANGE = 0xEA61, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
+constexpr uint16_t C_RED = 0xE8E4, C_ORANGE = 0xFAE0, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
 constexpr uint16_t C_WHITE = TFT_WHITE;
 constexpr uint16_t C_OPT = 0x18E3;
 
@@ -95,6 +95,7 @@ void handleAskStateAlarm(const String &IDhub, const String &IDdigi);
 void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi);
 void taskTraiteTrame(void *pvParameters);
 void taskTraiteSensor(void *pvParameters);
+void BlinkLeds(void);
 void animateBtn(int x, int y, int w, int h, int r, uint16_t c);
 
 Screen currentScreen = HOME;
@@ -144,8 +145,9 @@ void drawHome() //* Affiche le menu home
     if (locked)
     {
         //* Exemple: Allumer les LEDs en orange quand l'alarme est "armée" mais calme
-        fill_solid(leds, NUM_LEDS, CRGB::Orange);
+        fill_solid(leds, NUM_LEDS, CRGB::OrangeRed);
         FastLED.show();
+        FastLED.setBrightness(50);
     }
 
     M5.Lcd.fillRoundRect(MGN, R1_Y, W - (MGN * 2), R1_H, R1_R, C_GREY);
@@ -345,18 +347,31 @@ void handleAskStateAlarm(const String &IDhub, const String &IDdigi) //* Renvoi l
     // Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
 }
 
+String getMacFactory(void)
+{
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+
+    char macStr[18];
+    sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X",
+            mac[0], mac[1], mac[2],
+            mac[3], mac[4], mac[5]);
+
+    return String(macStr);
+}
+
 void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réceptions série
 {
     char buffer[TRAME_SIZE];
     uint8_t i = 0;
 
-    const String IDdigi = "IDdigi";
-    const String IDhub = "IDhub";
+    const String IDdigi = "3C:8A:1F:D7:21:4C";
+    const String IDhub = "000000000000";
 
-    static const std::regex re_ask_len("str/IDdigi/IDhub/AskLenghtMDP/0");
-    static const std::regex re_ask_state_alarm("str/IDdigi/IDhub/AskStateAlarm/0");
-    static const std::regex re_mdp_input("str/IDdigi/IDhub/MDPInput/[0-9]{1,9}");
-    static const std::regex re_rfid_input("str/IDdigi/IDhub/RFIDInput/[ ,a-z,A-Z,0-9]{12,21}");
+    static const std::regex re_ask_len("str/[ ,a-z,A-Z,0-9,:]{12,21}/[ ,a-z,A-Z,0-9,:]{12,21}/AskLenghtMDP/0");
+    static const std::regex re_ask_state_alarm("str/[ ,a-z,A-Z,0-9,:]{12,21}/[ ,a-z,A-Z,0-9,:]{12,21}/AskStateAlarm/0");
+    static const std::regex re_mdp_input("str/[ ,a-z,A-Z,0-9,:]{12,21}/[ ,a-z,A-Z,0-9,:]{12,21}/MDPInput/[0-9]{1,9}");
+    static const std::regex re_rfid_input("str/[ ,a-z,A-Z,0-9,:]{12,21}/[ ,a-z,A-Z,0-9,:]{12,21}/RFIDInput/[ ,a-z,A-Z,0-9]{12,21}");
 
     while (1)
     {
@@ -620,6 +635,10 @@ void loop()
             }
         }
     }
+    else if (currentScreen == ALARM)
+    {
+        BlinkLeds();
+    }
 }
 
 String comparePwd(const char *PWD) //* Comparateur de MDP lancée par handleMDPInput
@@ -710,13 +729,24 @@ void taskGestionLcd(void *pvParameters)
 
 void BlinkLeds(void) //* Faire clignoter la barre LED en rouge lors d'une intrusion
 {
-    while (currentScreen == ALARM)
+    static unsigned long lastBlink = 0;
+    static bool ledState = false;
+
+    if (millis() - lastBlink > 100)
     {
-        fill_solid(leds, NUM_LEDS, CRGB::Red);
-        FastLED.show();
-        delay(100);
-        FastLED.clear(true);
-        delay(100);
+        lastBlink = millis();
+        ledState = !ledState;
+        if (ledState)
+        {
+            fill_solid(leds, NUM_LEDS, CRGB::Red);
+            FastLED.show();
+            FastLED.setBrightness(255);
+        }
+        else
+        {
+            FastLED.clear(true);
+            FastLED.setBrightness(50);
+        }
     }
 }
 
@@ -739,6 +769,4 @@ void drawAlarm()
     M5.Lcd.drawString("Desactivation requise", W / 2, H / 2 + 30);
     M5.Lcd.pushImage((W - 50) / 2, 20, 50, 50, (uint16_t *)siren, 0x0000);
     xSemaphoreGive(lcdMutex);
-
-    BlinkLeds();
 }

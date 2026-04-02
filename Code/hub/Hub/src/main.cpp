@@ -17,8 +17,8 @@ const char *RFID_PWD = " 39 72 34 94";
 
 uint8_t sensor1 = 19;
 uint8_t alarmSiren = 27;
-uint8_t faceDetector1 = 18;
-uint8_t faceDetector2 = 38;
+uint8_t faceDetector1 = 32;
+uint8_t faceDetector2 = 33;
 bool RFIDEnabled = false;
 
 #define USE_SERIAL2 // Définir pour utiliser Serial2
@@ -468,6 +468,7 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
         {
             RFIDEnabled = true;
             logSerial("Visage connu detectee");
+            vTaskDelay(pdMS_TO_TICKS(1000));
         }
         if (RFIDEnabled == true)
         {
@@ -494,7 +495,7 @@ void setup()
 
     preferences.begin("preferences", false);
 
-    currentScreen = (Screen)preferences.getUInt("Screen", (uint32_t)HOME);
+    locked = preferences.getBool("mon_booleen", false);
 
     lcdMutex = xSemaphoreCreateMutex();
 
@@ -525,7 +526,17 @@ void setup()
 
 void loop()
 {
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.update();
+    xSemaphoreGive(lcdMutex);
+
+    static bool previousLocked = locked;
+    if (locked != previousLocked) //* Enregistrer l'état d'alarme à chaque changement
+    {
+        preferences.putBool("mon_booleen", locked);
+        previousLocked = locked;
+        delay(100);
+    }
 
     if (currentScreen == HOME)
     {
@@ -563,15 +574,6 @@ void loop()
             }
         }
     }
-
-    /*if (digitalRead(19) == 1)
-    {
-        logSerial("OUI");
-        delay(1000);
-    }else{
-        logSerial("NON");
-        delay(1000);
-    }*/
 }
 
 String comparePwd(const char *PWD) //* Comparateur de MDP lancée par handleMDPInput
@@ -593,12 +595,17 @@ String comparePwd(const char *PWD) //* Comparateur de MDP lancée par handleMDPI
 String compareRfid(const char *RFID) //* Comparateur de RFID lancée par handleRFIDInput
 {
     String verif;
-    if (strcmp(RFID, RFID_PWD) == 0 && RFIDEnabled == true)
+    if (strcmp(RFID, RFID_PWD) == 0 && RFIDEnabled == true) //* Cas ou tout est bon
     {
         verif = "true";
         Serial.println("true");
     }
-    else
+    else if (strcmp(RFID, RFID_PWD) == 0 && ((digitalRead(faceDetector1) == 0 && digitalRead(faceDetector2) == 0))) //* Cas ou il n'y a pas de caméra avec le bon RFID
+    {
+        verif = "CamOFF";
+        Serial.println("CamOFF");
+    }
+    else //* Autres cas
     {
         verif = "false";
         Serial.println("false");

@@ -6,10 +6,11 @@
 #include <regex>
 #include <Preferences.h>
 #include "images.h"
+#include <FastLED.h>
 
 constexpr uint16_t C_BG = TFT_BLACK;
-constexpr uint16_t C_RED = 0xE8E4, C_GREEN = 0x07E0, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
-constexpr uint16_t C_WHITE = TFT_WHITE, C_RED1 = 0xFEBA, C_RED2 = 0xFD34, C_RED3 = 0xFB6D, C_RED4 = 0xF9C7, C_RED5 = 0xF800;
+constexpr uint16_t C_RED = 0xE8E4, C_ORANGE = 0xEA61, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
+constexpr uint16_t C_WHITE = TFT_WHITE;
 constexpr uint16_t C_OPT = 0x18E3;
 
 const char *KEYBOARD_PWD = "1111";
@@ -21,7 +22,12 @@ uint8_t faceDetector1 = 32;
 uint8_t faceDetector2 = 33;
 bool RFIDEnabled = false;
 
-#define USE_SERIAL2 // Définir pour utiliser Serial2
+//* Configuration de la barre LED M5GO Bottom2
+#define LED_PIN 25
+#define NUM_LEDS 10
+CRGB leds[NUM_LEDS];
+
+#define USE_SERIAL2 //? Définir pour utiliser Serial2
 
 #ifdef USE_SERIAL2
 #define SysSerial Serial2
@@ -106,7 +112,7 @@ char displayBuffer[4][TRAME_SIZE];
 
 void drawHome() //* Affiche le menu home
 {
-    uint16_t hBg = locked ? C_RED : C_DARKGREEN;
+    uint16_t hBg = locked ? C_ORANGE : C_DARKGREEN;
 
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.fillScreen(C_BG);
@@ -122,24 +128,25 @@ void drawHome() //* Affiche le menu home
     }
     else
     {
-        const char *parts[] = {"Alarme Conne", "c", "t", "e", "e", "+"};
-        uint16_t colors[] = {C_WHITE, C_RED1, C_RED2, C_RED3, C_RED4, C_RED5};
-        int startX = 1;
-        M5.Lcd.setTextDatum(ML_DATUM);
+        M5.Lcd.setTextDatum(MC_DATUM);
+        M5.Lcd.setTextColor(C_WHITE, hBg);
+        M5.Lcd.drawString("Alarme Desactivee", W / 2, HEADER_H / 2);
 
-        for (int i = 0; i < 6; i++)
-        {
-            M5.Lcd.setTextColor(colors[i], hBg);
-            int yPos = (i == 5) ? 22 : 24;
-            M5.Lcd.drawString(parts[i], startX, yPos);
-            startX += M5.Lcd.textWidth(parts[i]);
-        }
+        //* Eteindre les LEDs quand l'alarme est désactivée
+        FastLED.clear(true);
     }
 
     M5.Lcd.setFreeFont(&FreeSerif12pt7b);
     M5.Lcd.setTextColor(C_WHITE, C_BG);
     M5.Lcd.setTextDatum(TC_DATUM);
     M5.Lcd.drawString(locked ? "Alarme en cours" : "Historique mouvements :", W / 2, 60);
+
+    if (locked)
+    {
+        //* Exemple: Allumer les LEDs en orange quand l'alarme est "armée" mais calme
+        fill_solid(leds, NUM_LEDS, CRGB::Orange);
+        FastLED.show();
+    }
 
     M5.Lcd.fillRoundRect(MGN, R1_Y, W - (MGN * 2), R1_H, R1_R, C_GREY);
     M5.Lcd.setTextColor(C_WHITE, C_GREY);
@@ -152,10 +159,10 @@ void drawHome() //* Affiche le menu home
         M5.Lcd.print(displayBuffer[i]);
     }
 
-    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
-    M5.Lcd.setTextColor(C_WHITE, C_RED);
+    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_ORANGE);
+    M5.Lcd.setTextColor(C_WHITE, C_ORANGE);
     M5.Lcd.setTextDatum(BC_DATUM);
-    M5.Lcd.drawString("Alarme", (C1_X + BTN_W / 2) + 25, 218);
+    M5.Lcd.drawString(locked ? "PANIC" : "Alarme", (C1_X + BTN_W / 2) + 25, 218);
     M5.Lcd.pushImage((C1_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)siren, 0x0000);
 
     M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
@@ -394,7 +401,7 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
                 if (i < TRAME_SIZE - 1)
                     i++;
                 else
-                    i = 0; // Protection débordement buffer
+                    i = 0; //* Protection débordement buffer
             }
         }
     }
@@ -493,9 +500,17 @@ void setup()
 {
     M5.begin();
 
+    // Initialisation de la barre LED
+    FastLED.addLeds<SK6812, LED_PIN, GRB>(leds, NUM_LEDS);
+    FastLED.setBrightness(50); //* Luminosité (0-255)
+    FastLED.clear(true);       //* Eteindre tout au démarrage
+
     preferences.begin("preferences", false);
 
     locked = preferences.getBool("mon_booleen", false);
+    //* Récupérer l'écran et l'état de l'alarme
+    locked = preferences.getBool("locked_state", false);
+    Screen savedScreen = static_cast<Screen>(preferences.getInt("saved_screen", static_cast<int>(HOME)));
 
     lcdMutex = xSemaphoreCreateMutex();
 
@@ -507,7 +522,8 @@ void setup()
         displayBuffer[i][0] = '\0';
     }
 
-    setScreen(HOME);
+    //* Initialiser l'affichage sur l'écran sauvegardé
+    setScreen(savedScreen);
 
     RTC_TimeTypeDef TimeStruct;
     TimeStruct.Hours = 15;
@@ -530,11 +546,36 @@ void loop()
     M5.update();
     xSemaphoreGive(lcdMutex);
 
+    /*if (digitalRead(faceDetector1) == 1) //! TESTING PURPOSE
+    {
+        logSerial("1 true");
+    }
+    else
+    {
+        logSerial("1 false");
+    }
+    if (digitalRead(faceDetector2) == 1)
+    {
+        logSerial("2 true");
+    }
+    else
+    {
+        logSerial("2 false");
+    }
+    delay(1000);*/
+
     static bool previousLocked = locked;
     if (locked != previousLocked) //* Enregistrer l'état d'alarme à chaque changement
     {
-        preferences.putBool("mon_booleen", locked);
+        preferences.putBool("locked_state", locked);
         previousLocked = locked;
+        delay(100);
+    }
+    static Screen previousScreen = currentScreen;
+    if (currentScreen != previousScreen) //* Enregistrer l'état de l'écran à chaque changement
+    {
+        preferences.putInt("saved_screen", static_cast<int>(currentScreen));
+        previousScreen = currentScreen;
         delay(100);
     }
 
@@ -542,11 +583,16 @@ void loop()
     {
         if (bLock && bLock->wasReleased())
         {
-            logSerial("Alarme active !");
             if (!locked)
             {
+                logSerial("Alarme active !");
                 locked = true;
                 drawHome();
+            }
+            else
+            {
+                logSerial("Bouton PANIC presse !");
+                setScreen(ALARM);
             }
             animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
         }
@@ -662,6 +708,18 @@ void taskGestionLcd(void *pvParameters)
     }
 }
 
+void BlinkLeds(void) //* Faire clignoter la barre LED en rouge lors d'une intrusion
+{
+    while (currentScreen == ALARM)
+    {
+        fill_solid(leds, NUM_LEDS, CRGB::Red);
+        FastLED.show();
+        delay(100);
+        FastLED.clear(true);
+        delay(100);
+    }
+}
+
 void initAlarmButtons()
 {
     clearButtons();
@@ -681,4 +739,6 @@ void drawAlarm()
     M5.Lcd.drawString("Desactivation requise", W / 2, H / 2 + 30);
     M5.Lcd.pushImage((W - 50) / 2, 20, 50, 50, (uint16_t *)siren, 0x0000);
     xSemaphoreGive(lcdMutex);
+
+    BlinkLeds();
 }

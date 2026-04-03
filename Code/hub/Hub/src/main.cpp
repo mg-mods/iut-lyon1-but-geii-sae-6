@@ -9,12 +9,15 @@
 #include <FastLED.h>
 
 constexpr uint16_t C_BG = TFT_BLACK;
-constexpr uint16_t C_RED = 0xE8E4, C_ORANGE = 0xFAE0, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
+constexpr uint16_t C_RED = 0xFFE0, C_ORANGE = 0xE8E4, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
 constexpr uint16_t C_WHITE = TFT_WHITE;
 constexpr uint16_t C_OPT = 0x18E3;
 
 const char *KEYBOARD_PWD = "1111";
 const char *RFID_PWD = " 39 72 34 94";
+
+String IDdigi = "0000";
+String IDhub = "000000000000";
 
 uint8_t sensor1 = 19;
 uint8_t alarmSiren = 27;
@@ -89,10 +92,13 @@ void initHomeButtons();
 void setScreen(Screen s);
 void initOptionsButtons();
 void drawOptions();
+void fadeLeds();
+bool checkMACisInROM(char *buffer);
 void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi);
 void handleAskLenghtMDP(const String &IDhub, const String &IDdigi);
 void handleAskStateAlarm(const String &IDhub, const String &IDdigi);
 void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi);
+void handlePairing(char *buffer);
 void taskTraiteTrame(void *pvParameters);
 void taskTraiteSensor(void *pvParameters);
 void BlinkLeds(void);
@@ -141,14 +147,6 @@ void drawHome() //* Affiche le menu home
     M5.Lcd.setTextColor(C_WHITE, C_BG);
     M5.Lcd.setTextDatum(TC_DATUM);
     M5.Lcd.drawString(locked ? "Alarme en cours" : "Historique mouvements :", W / 2, 60);
-
-    if (locked)
-    {
-        //* Exemple: Allumer les LEDs en orange quand l'alarme est "armée" mais calme
-        fill_solid(leds, NUM_LEDS, CRGB::OrangeRed);
-        FastLED.show();
-        FastLED.setBrightness(50);
-    }
 
     M5.Lcd.fillRoundRect(MGN, R1_Y, W - (MGN * 2), R1_H, R1_R, C_GREY);
     M5.Lcd.setTextColor(C_WHITE, C_GREY);
@@ -330,6 +328,7 @@ void handleAskLenghtMDP(const String &IDhub, const String &IDdigi) //* Renvoie l
     snprintf(message.msg, TRAME_SIZE, "Demande MDP");
     xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
 
+    Serial.println("str/" + IDhub + "/" + IDdigi + "/LenghtMDP/" + lstr);
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/LenghtMDP/" + lstr);
 }
 
@@ -345,6 +344,25 @@ void handleAskStateAlarm(const String &IDhub, const String &IDdigi) //* Renvoi l
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
     // Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
+}
+
+void handlePairing(char *buffer)
+{
+    String line = buffer;
+    Serial.println(line);
+    Serial.println("Appairing recu !");
+    if (line.startsWith("str/"))
+    {
+        int firstSlash = line.indexOf('/');
+        int secondSlash = line.indexOf('/', firstSlash + 1);
+
+        if (firstSlash != -1 && secondSlash != -1)
+        {
+            IDdigi = line.substring(firstSlash + 1, secondSlash);
+        }
+    }
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/pairing/0");
+    Serial.println("str/" + IDhub + "/" + IDdigi + "/pairing/0");
 }
 
 String getMacFactory(void)
@@ -365,13 +383,11 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
     char buffer[TRAME_SIZE];
     uint8_t i = 0;
 
-    const String IDdigi = "3C:8A:1F:D7:21:4C";
-    const String IDhub = "000000000000";
-
-    static const std::regex re_ask_len("str/[ ,a-z,A-Z,0-9,:]{12,21}/[ ,a-z,A-Z,0-9,:]{12,21}/AskLenghtMDP/0");
-    static const std::regex re_ask_state_alarm("str/[ ,a-z,A-Z,0-9,:]{12,21}/[ ,a-z,A-Z,0-9,:]{12,21}/AskStateAlarm/0");
-    static const std::regex re_mdp_input("str/[ ,a-z,A-Z,0-9,:]{12,21}/[ ,a-z,A-Z,0-9,:]{12,21}/MDPInput/[0-9]{1,9}");
-    static const std::regex re_rfid_input("str/[ ,a-z,A-Z,0-9,:]{12,21}/[ ,a-z,A-Z,0-9,:]{12,21}/RFIDInput/[ ,a-z,A-Z,0-9]{12,21}");
+    static const std::regex re_ask_len("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskLenghtMDP/0");
+    static const std::regex re_ask_state_alarm("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskStateAlarm/0");
+    static const std::regex re_mdp_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/MDPInput/[0-9]{1,9}");
+    static const std::regex re_rfid_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/RFIDInput/[ ,a-z,A-Z,0-9]{17}");
+    static const std::regex re_pairing("str/[ ,a-z,A-Z,0-9,:]{17}/000000000000/pairing/0");
 
     while (1)
     {
@@ -383,25 +399,32 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
 
                 if (i > 0)
                 {
-                    if (strcmp(buffer, "E") == 0)
+                    if (checkMACisInROM(buffer) == true)
                     {
-                        logSerial("E");
+                        if (strcmp(buffer, "E") == 0)
+                        {
+                            logSerial("E");
+                        }
+                        else if (std::regex_match(std::string(buffer), re_ask_len)) // Demande longueur MDP
+                        {
+                            handleAskLenghtMDP(IDhub, IDdigi);
+                        }
+                        else if (std::regex_match(std::string(buffer), re_ask_state_alarm)) // Demande vérifier MDP
+                        {
+                            handleAskStateAlarm(IDhub, IDdigi);
+                        }
+                        else if (std::regex_match(std::string(buffer), re_mdp_input)) // Demande vérifier MDP
+                        {
+                            handleMDPInput(buffer, IDhub, IDdigi);
+                        }
+                        else if (std::regex_match(std::string(buffer), re_rfid_input)) // Demande vérifier RFID
+                        {
+                            handleRFIDInput(buffer, IDhub, IDdigi);
+                        }
                     }
-                    else if (std::regex_match(std::string(buffer), re_ask_len)) // Demande longueur MDP
+                    else if (std::regex_match(std::string(buffer), re_pairing))
                     {
-                        handleAskLenghtMDP(IDhub, IDdigi);
-                    }
-                    else if (std::regex_match(std::string(buffer), re_ask_state_alarm)) // Demande vérifier MDP
-                    {
-                        handleAskStateAlarm(IDhub, IDdigi);
-                    }
-                    else if (std::regex_match(std::string(buffer), re_mdp_input)) // Demande vérifier MDP
-                    {
-                        handleMDPInput(buffer, IDhub, IDdigi);
-                    }
-                    else if (std::regex_match(std::string(buffer), re_rfid_input)) // Demande vérifier RFID
-                    {
-                        handleRFIDInput(buffer, IDhub, IDdigi);
+                        handlePairing(buffer);
                     }
                     else
                     {
@@ -460,7 +483,7 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
                 setScreen(ALARM);
             }
 
-            delay(100);
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
         else
         {
@@ -494,7 +517,7 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
         }
         if (RFIDEnabled == true)
         {
-            delay(10000);
+            vTaskDelay(pdMS_TO_TICKS(10000));
             RFIDEnabled = false;
         }
     }
@@ -505,7 +528,7 @@ void animateBtn(int x, int y, int w, int h, int r, uint16_t c) //* Mettre des an
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.drawRoundRect(x, y, w, h, r, C_WHITE);
     xSemaphoreGive(lcdMutex);
-    delay(100);
+    vTaskDelay(pdMS_TO_TICKS(100));
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.drawRoundRect(x, y, w, h, r, c);
     xSemaphoreGive(lcdMutex);
@@ -522,6 +545,8 @@ void setup()
 
     preferences.begin("preferences", false);
 
+    IDhub = getMacFactory();
+
     locked = preferences.getBool("mon_booleen", false);
     //* Récupérer l'écran et l'état de l'alarme
     locked = preferences.getBool("locked_state", false);
@@ -531,6 +556,7 @@ void setup()
 
     Serial2.begin(9600, SERIAL_8N1, 13, 14);
     logSerial("Initialise");
+    Serial.println(getMacFactory());
 
     for (int i = 0; i < 4; i++)
     {
@@ -555,89 +581,123 @@ void setup()
     xTaskCreatePinnedToCore(taskTraiteSensor, "TraiteSensor", 8192, nullptr, 3, nullptr, 0);
 }
 
+void handleStateTransitions()
+{
+    static bool previousLocked = locked;
+    if (locked != previousLocked)
+    {
+        preferences.putBool("locked_state", locked);
+        previousLocked = locked;
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    static Screen previousScreen = currentScreen;
+    if (currentScreen != previousScreen)
+    {
+        preferences.putInt("saved_screen", static_cast<int>(currentScreen));
+        previousScreen = currentScreen;
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+void handleHomeLogic()
+{
+    if (bLock && bLock->wasReleased())
+    {
+        if (!locked)
+        {
+            logSerial("Alarme active !");
+            locked = true;
+            drawHome();
+        }
+        else
+        {
+            logSerial("Bouton PANIC presse !");
+            setScreen(ALARM);
+        }
+        animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
+    }
+
+    if (bBlue && bBlue->wasReleased())
+    {
+        animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
+        setScreen(OPTIONS);
+    }
+}
+
+void handleOptionsLogic()
+{
+    for (int i = 0; i < OPTION_COUNT; i++)
+    {
+        if (bOpts[i] && bOpts[i]->wasReleased())
+        {
+            if (i == 5)
+            {
+                animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_GREY);
+                setScreen(HOME);
+            }
+            else
+            {
+                animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
+            }
+        }
+    }
+}
+
+bool checkMACisInROM(char *buffer)
+{
+    String line = buffer;
+    String MAC = "00:00:00:00:00:00";
+
+    if (line.startsWith("str/"))
+    {
+        int firstSlash = line.indexOf('/');
+        int secondSlash = line.indexOf('/', firstSlash + 1);
+
+        if (firstSlash != -1 && secondSlash != -1)
+        {
+            MAC = line.substring(firstSlash + 1, secondSlash);
+        }
+    }
+    else
+    {
+        return false;
+    }
+
+    if (MAC == IDdigi)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 void loop()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.update();
     xSemaphoreGive(lcdMutex);
 
-    /*if (digitalRead(faceDetector1) == 1) //! TESTING PURPOSE
-    {
-        logSerial("1 true");
-    }
-    else
-    {
-        logSerial("1 false");
-    }
-    if (digitalRead(faceDetector2) == 1)
-    {
-        logSerial("2 true");
-    }
-    else
-    {
-        logSerial("2 false");
-    }
-    delay(1000);*/
+    handleStateTransitions();
 
-    static bool previousLocked = locked;
-    if (locked != previousLocked) //* Enregistrer l'état d'alarme à chaque changement
+    if (locked) //*Fonction d'immage si alarme armée
     {
-        preferences.putBool("locked_state", locked);
-        previousLocked = locked;
-        delay(100);
-    }
-    static Screen previousScreen = currentScreen;
-    if (currentScreen != previousScreen) //* Enregistrer l'état de l'écran à chaque changement
-    {
-        preferences.putInt("saved_screen", static_cast<int>(currentScreen));
-        previousScreen = currentScreen;
-        delay(100);
+        fadeLeds();
     }
 
-    if (currentScreen == HOME)
+    switch (currentScreen)
     {
-        if (bLock && bLock->wasReleased())
-        {
-            if (!locked)
-            {
-                logSerial("Alarme active !");
-                locked = true;
-                drawHome();
-            }
-            else
-            {
-                logSerial("Bouton PANIC presse !");
-                setScreen(ALARM);
-            }
-            animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
-        }
-        if (bBlue && bBlue->wasReleased())
-        {
-            animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
-            setScreen(OPTIONS);
-        }
-    }
-    else if (currentScreen == OPTIONS)
-    {
-        for (int i = 0; i < OPTION_COUNT; i++)
-        {
-            if (bOpts[i] && bOpts[i]->wasReleased())
-            {
-                if (i == 5)
-                {
-                    animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_GREY);
-                    setScreen(HOME);
-                }
-                else
-                {
-                    animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
-                }
-            }
-        }
-    }
-    else if (currentScreen == ALARM)
-    {
+    case HOME:
+        handleHomeLogic();
+        break;
+    case OPTIONS:
+        handleOptionsLogic();
+        break;
+    case ALARM:
         BlinkLeds();
+        break;
     }
 }
 
@@ -738,7 +798,7 @@ void BlinkLeds(void) //* Faire clignoter la barre LED en rouge lors d'une intrus
         ledState = !ledState;
         if (ledState)
         {
-            fill_solid(leds, NUM_LEDS, CRGB::Red);
+            fill_solid(leds, NUM_LEDS, CRGB::Yellow);
             FastLED.show();
             FastLED.setBrightness(255);
         }
@@ -748,6 +808,36 @@ void BlinkLeds(void) //* Faire clignoter la barre LED en rouge lors d'une intrus
             FastLED.setBrightness(50);
         }
     }
+}
+
+void fadeLeds(void) //* Faire clignoter la barre LED en rouge lors d'une intrusion
+{
+    static bool fading = true;
+    static int fade = 255;
+
+    if (fading == true)
+    {
+        fade--;
+        vTaskDelay(pdMS_TO_TICKS(100));
+        if (fade <= 0)
+        {
+            fading = false;
+        }
+    }
+    else
+    {
+        {
+            fade++;
+            vTaskDelay(pdMS_TO_TICKS(100));
+            if (fade >= 25)
+            {
+                fading = true;
+            }
+        }
+    }
+    FastLED.setBrightness(fade);
+    fill_solid(leds, NUM_LEDS, CRGB::Red);
+    FastLED.show();
 }
 
 void initAlarmButtons()
@@ -760,10 +850,10 @@ void drawAlarm()
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.fillScreen(C_RED);
     M5.Lcd.setTextSize(1);
-    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
+    M5.Lcd.setFreeFont(&FreeSans24pt7b);
     M5.Lcd.setTextDatum(MC_DATUM);
 
-    M5.Lcd.setTextColor(C_WHITE, C_RED);
+    M5.Lcd.setTextColor(BLACK, C_RED);
     M5.Lcd.drawString("INTRUSION", W / 2, H / 2 - 20);
     M5.Lcd.setFreeFont(&FreeSerif12pt7b);
     M5.Lcd.drawString("Desactivation requise", W / 2, H / 2 + 30);

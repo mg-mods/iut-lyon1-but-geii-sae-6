@@ -405,7 +405,7 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
     static const std::regex re_ask_len("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskLenghtMDP/0");
     static const std::regex re_ask_state_alarm("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskStateAlarm/0");
     static const std::regex re_mdp_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/MDPInput/[0-9]{1,9}");
-    static const std::regex re_rfid_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/RFIDInput/[ ,a-z,A-Z,0-9]{17}");
+    static const std::regex re_rfid_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/RFIDInput/[ ,a-z,A-Z,0-9]{12,17}");
     static const std::regex re_pairing("str/[ ,a-z,A-Z,0-9,:]{17}/000000000000/pairing/0");
 
     while (1)
@@ -581,14 +581,15 @@ void setup()
     FastLED.clear(true);       //* Eteindre tout au démarrage
 
     preferences.begin("preferences", false);
-    preferences.putString("mac_digi", "000000000000"); //? Décommenter pour reset la mémoire
+    //preferences.putString("mac_digi", "000000000000"); //? Décommenter pour reset la mémoire
 
     IDhub = getMacFactory();
 
     locked = preferences.getBool("mon_booleen", false);
     //* Récupérer l'écran et l'état de l'alarme
     locked = preferences.getBool("locked_state", false);
-    IDdigi = preferences.getString("mac_digi", "000000000000");
+    IDdigi = preferences.getString("mac_digi", "default");
+
     Screen savedScreen = static_cast<Screen>(preferences.getInt("saved_screen", static_cast<int>(HOME)));
 
     lcdMutex = xSemaphoreCreateMutex();

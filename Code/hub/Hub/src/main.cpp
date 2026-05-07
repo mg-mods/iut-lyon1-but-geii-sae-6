@@ -74,13 +74,14 @@ constexpr int OPTION_COUNT = 6;
 int optX[OPTION_COUNT] = {C1_X, C2_X, C1_X, C2_X, C1_X, C2_X};
 int optY[OPTION_COUNT] = {O_Y1, O_Y1, O_Y2, O_Y2, O_Y3, O_Y3};
 const char *optNames[OPTION_COUNT] = {"O1", "O2", "O3", "O4", "O5", "O6"};
-const char *optLabels[OPTION_COUNT] = {"Wifi", "Son", "Ecran", "Journal", "Capteurs", "Retour"};
+const char *optLabels[OPTION_COUNT] = {"Wifi", "Son", "Ecran", "Appairage", "Capteurs", "Retour"};
 
 enum Screen
 {
     HOME,
     OPTIONS,
-    ALARM
+    ALARM,
+    PAIRING
 };
 
 void drawAlarm();
@@ -101,11 +102,15 @@ void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi);
 void handlePairing(char *buffer);
 void taskTraiteTrame(void *pvParameters);
 void taskTraiteSensor(void *pvParameters);
+void drawPairing();
+void initPairingButtons();
+void handlePairingLogic();
 void BlinkLeds(void);
 void animateBtn(int x, int y, int w, int h, int r, uint16_t c);
 
 Screen currentScreen = HOME;
 bool locked = false;
+bool isPairingMode = false;
 
 Preferences preferences;
 Button *bLock = nullptr;
@@ -219,6 +224,11 @@ void setScreen(Screen s)
     {
         initAlarmButtons();
         drawAlarm();
+    }
+    else if (s == PAIRING)
+    {
+        initPairingButtons();
+        drawPairing();
     }
 }
 
@@ -360,9 +370,18 @@ void handlePairing(char *buffer)
         {
             IDdigi = line.substring(firstSlash + 1, secondSlash);
         }
+        preferences.putString("mac_digi", IDdigi);
+
+        Serial2.println("str/" + IDhub + "/" + IDdigi + "/pairing/0");
+        Serial.println("str/" + IDhub + "/" + IDdigi + "/pairing/0");
     }
-    Serial2.println("str/" + IDhub + "/" + IDdigi + "/pairing/0");
-    Serial.println("str/" + IDhub + "/" + IDdigi + "/pairing/0");
+
+    isPairingMode = false;
+
+    if (currentScreen == PAIRING)
+    {
+        drawPairing();
+    }
 }
 
 String getMacFactory(void)
@@ -421,16 +440,34 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
                         {
                             handleRFIDInput(buffer, IDhub, IDdigi);
                         }
+                        else if (std::regex_match(std::string(buffer), re_pairing))
+                        {
+                            if (isPairingMode)
+                            {
+                                handlePairing(buffer);
+                            }
+                            else
+                            {
+                                logSerial("Appairage refuse: inactif");
+                            }
+                        }
                     }
                     else if (std::regex_match(std::string(buffer), re_pairing))
                     {
-                        handlePairing(buffer);
+                        if (isPairingMode)
+                        {
+                            handlePairing(buffer);
+                        }
+                        else
+                        {
+                            logSerial("Appairage refuse: inactif");
+                        }
                     }
-                    else
-                    {
-                        logSerial("ERREUR");
-                        logSerial(buffer);
-                    }
+                else
+                {
+                    logSerial("ERREUR : ");
+                    logSerial(buffer);
+                }
                     i = 0;
                 }
             }
@@ -544,12 +581,14 @@ void setup()
     FastLED.clear(true);       //* Eteindre tout au démarrage
 
     preferences.begin("preferences", false);
+    preferences.putString("mac_digi", "000000000000"); //? Décommenter pour reset la mémoire
 
     IDhub = getMacFactory();
 
     locked = preferences.getBool("mon_booleen", false);
     //* Récupérer l'écran et l'état de l'alarme
     locked = preferences.getBool("locked_state", false);
+    IDdigi = preferences.getString("mac_digi", "000000000000");
     Screen savedScreen = static_cast<Screen>(preferences.getInt("saved_screen", static_cast<int>(HOME)));
 
     lcdMutex = xSemaphoreCreateMutex();
@@ -557,6 +596,7 @@ void setup()
     Serial2.begin(9600, SERIAL_8N1, 13, 14);
     logSerial("Initialise");
     Serial.println(getMacFactory());
+    Serial.println(IDdigi);
 
     for (int i = 0; i < 4; i++)
     {
@@ -636,6 +676,11 @@ void handleOptionsLogic()
                 animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_GREY);
                 setScreen(HOME);
             }
+            else if (i == 3)
+            {
+                animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
+                setScreen(PAIRING);
+            }
             else
             {
                 animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
@@ -667,10 +712,12 @@ bool checkMACisInROM(char *buffer)
     if (MAC == IDdigi)
     {
         return true;
+        Serial.println("true");
     }
     else
     {
         return false;
+        Serial.println("false");
     }
 }
 
@@ -682,7 +729,7 @@ void loop()
 
     handleStateTransitions();
 
-    if (locked) //*Fonction d'immage si alarme armée
+    if (locked && currentScreen != ALARM) //*Fonction d'immage si alarme armée
     {
         fadeLeds();
     }
@@ -697,6 +744,9 @@ void loop()
         break;
     case ALARM:
         BlinkLeds();
+        break;
+    case PAIRING:
+        handlePairingLogic();
         break;
     }
 }
@@ -799,8 +849,8 @@ void BlinkLeds(void) //* Faire clignoter la barre LED en rouge lors d'une intrus
         if (ledState)
         {
             fill_solid(leds, NUM_LEDS, CRGB::Yellow);
-            FastLED.show();
             FastLED.setBrightness(255);
+            FastLED.show();
         }
         else
         {
@@ -859,4 +909,66 @@ void drawAlarm()
     M5.Lcd.drawString("Desactivation requise", W / 2, H / 2 + 30);
     M5.Lcd.pushImage((W - 50) / 2, 20, 50, 50, (uint16_t *)siren, 0x0000);
     xSemaphoreGive(lcdMutex);
+}
+
+void initPairingButtons()
+{
+    clearButtons();
+    bOpts[0] = new Button(C1_X, R2_Y, BTN_W, R2_H, false, "Retour");
+    bOpts[1] = new Button(C2_X, R2_Y, BTN_W, R2_H, false, "Reappairer");
+}
+
+void drawPairing()
+{
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+    M5.Lcd.fillScreen(C_BG);
+    M5.Lcd.fillRect(0, 0, W, HEADER_H, C_BLUE);
+
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
+    M5.Lcd.drawString("Appairage", W / 2, HEADER_H / 2);
+
+    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
+    M5.Lcd.setTextColor(C_WHITE, C_BG);
+    M5.Lcd.drawString("Mon MAC :", W / 2, 80);
+    M5.Lcd.drawString(IDhub, W / 2, 105);
+
+    M5.Lcd.drawString("MAC Appaire :", W / 2, 140);
+    M5.Lcd.drawString(isPairingMode ? "En attente..." : IDdigi, W / 2, 165);
+
+    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_GREY);
+    M5.Lcd.setTextColor(C_WHITE, C_GREY);
+    M5.Lcd.drawString("Retour", C1_X + BTN_W / 2, R2_Y + R2_H / 2);
+
+    uint16_t pairColor = isPairingMode ? C_ORANGE : C_BLUE;
+    M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, pairColor);
+    M5.Lcd.setTextColor(C_WHITE, pairColor);
+    M5.Lcd.drawString(isPairingMode ? "Annuler" : "Reappairer", C2_X + BTN_W / 2, R2_Y + R2_H / 2);
+    xSemaphoreGive(lcdMutex);
+}
+
+void handlePairingLogic()
+{
+    if (bOpts[0] && bOpts[0]->wasReleased())
+    {
+        isPairingMode = false;
+        animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_GREY);
+        setScreen(OPTIONS);
+    }
+    if (bOpts[1] && bOpts[1]->wasReleased())
+    {
+        isPairingMode = !isPairingMode;
+
+        if (isPairingMode)
+        {
+            // Oublie l'ancienne adresse MAC immédiatement
+            IDdigi = "000000000000";
+            preferences.putString("mac_digi", IDdigi);
+        }
+
+        animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, isPairingMode ? C_ORANGE : C_BLUE);
+        drawPairing();
+    }
 }

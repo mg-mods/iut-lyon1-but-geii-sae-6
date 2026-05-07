@@ -63,6 +63,10 @@ void DrawOptionMenu(void);
 void PagePairing(void);
 void PageGenerique(String titre, String contenu);
 void PrintDigi(void);
+void PageInfosSysteme(void);
+void PageTestRFID(void);
+void PageHistorique(void);
+void drawDigitNeonStr(int x, int y1, String sym);
 
 // ====================== SETUP ======================
 
@@ -119,7 +123,7 @@ void loop() {}
 void TaskSynch(void *pvParameters)
 {
 
-    //saveValue("default"); // a commenter pour avoir la memoire persistante de l'appairege
+    // saveValue("default"); // a commenter pour avoir la memoire persistante de l'appairege
 
     if (readValue() == "default")
     {
@@ -232,59 +236,10 @@ void TaskInput(void *pvParameters)
     {
         M5.update();
 
-        // vérification du mot de passe
+        /* vérification du mot de passe
         if (InputUser.length() >= passwordLength)
         {
-            EventType event;
-            if (xSemaphoreTake(xSerialMutex, portMAX_DELAY) == pdTRUE)
-            {
-                while (Serial2.available())
-                    Serial2.read();
-
-                digitalWrite(RTtoggle, true);
-                Serial2.println("str/" + IDdigi + "/" + IDhub + "/MDPInput/" + InputUser);
-                Serial2.flush();
-                digitalWrite(RTtoggle, false);
-
-                String resp;
-                const uint32_t mdpTimeout = 2000; // Timeout 2000 ms, 
-
-                if (!waitSerial2(resp, mdpTimeout)) // <-- timeout appliqué ici
-                {
-                    event = EVENT_WRONG;
-                    M5.Lcd.fillRect(0, 0, 260, 60, TFT_DARKGREY);
-                    M5.Lcd.setCursor(15, 30);
-                    M5.Lcd.setTextColor(TFT_BLACK);
-                    M5.Lcd.setTextSize(2.5);
-                    M5.Display.print("Time out 2000ms"); // affichage timeout
-                    xSemaphoreGive(xSerialMutex);
-                }
-                else
-                {
-                    String FormatStatePass = "str/" + IDhub + "/" + IDdigi + "/StatePass/";
-                    Serial.println("resp: " + resp);
-
-                    if (resp.startsWith(FormatStatePass) && resp.substring(FormatStatePass.length()) == "true")
-                    {
-                        event = EVENT_GOOD;
-                        xQueueSend(queueSound, &event, 0);
-                        xSemaphoreGive(xSerialMutex);
-                        GoodPass(InputUser, 15, 15);
-                    }
-                    else
-                    {
-                        event = EVENT_WRONG;
-                        xQueueSend(queueSound, &event, 0);
-                        xSemaphoreGive(xSerialMutex);
-                        ShakeWrongPass(InputUser, 15, 15);
-                    }
-                }
-            }
-
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-            InputUser = "";
-            UpdateDigit(InputUser);
-        }
+        }*/
 
         // lecture du tactile
         if (M5.Touch.getCount() > 0)
@@ -293,24 +248,91 @@ void TaskInput(void *pvParameters)
             if (point.wasPressed())
             {
                 int tx = point.x, ty = point.y;
-                if ((tx >= 7 && tx <= 77) && (ty >= 84 && ty <= 154))
-                    PressButton(7, 84, 70, 70, "7", InputUser);
-                else if ((tx >= 7 && tx <= 77) && (ty >= 162 && ty <= 232))
-                    PressButton(7, 162, 70, 70, "4", InputUser);
-                else if ((tx >= 7 && tx <= 77) && (ty >= 240 && ty <= 310))
-                    PressButton(7, 240, 70, 70, "1", InputUser);
-                else if ((tx >= 85 && tx <= 155) && (ty >= 84 && ty <= 154))
-                    PressButton(85, 84, 70, 70, "8", InputUser);
-                else if ((tx >= 85 && tx <= 155) && (ty >= 162 && ty <= 232))
-                    PressButton(85, 162, 70, 70, "5", InputUser);
-                else if ((tx >= 85 && tx <= 155) && (ty >= 240 && ty <= 310))
-                    PressButton(85, 240, 70, 70, "2", InputUser);
-                else if ((tx >= 163 && tx <= 233) && (ty >= 84 && ty <= 154))
-                    PressButton(163, 84, 70, 70, "9", InputUser);
-                else if ((tx >= 163 && tx <= 233) && (ty >= 162 && ty <= 232))
-                    PressButton(163, 162, 70, 70, "6", InputUser);
-                else if ((tx >= 163 && tx <= 233) && (ty >= 240 && ty <= 310))
-                    PressButton(163, 240, 70, 70, "3", InputUser);
+                if ((tx >= 7 && tx <= 77) && (ty >= 84 && ty <= 136))
+                    PressButton(7, 84, 70, 52, "7", InputUser);
+                else if ((tx >= 7 && tx <= 77) && (ty >= 144 && ty <= 196))
+                    PressButton(7, 144, 70, 52, "4", InputUser);
+                else if ((tx >= 7 && tx <= 77) && (ty >= 204 && ty <= 256))
+                    PressButton(7, 204, 70, 52, "1", InputUser);
+                else if ((tx >= 7 && tx <= 77) && (ty >= 264 && ty <= 316))
+                {
+                    if (InputUser.length() > 0)
+                    {
+                        EventType event;
+                        if (xSemaphoreTake(xSerialMutex, portMAX_DELAY) == pdTRUE)
+                        {
+                            while (Serial2.available())
+                                Serial2.read();
+
+                            digitalWrite(RTtoggle, true);
+                            Serial2.println("str/" + IDdigi + "/" + IDhub + "/MDPInput/" + InputUser);
+                            Serial.println("str/" + IDdigi + "/" + IDhub + "/MDPInput/" + InputUser);
+                            Serial2.flush();
+                            digitalWrite(RTtoggle, false);
+
+                            String resp;
+                            const uint32_t mdpTimeout = 2000; // Timeout 2000 ms,
+
+                            if (!waitSerial2(resp, mdpTimeout)) // <-- timeout appliqué ici
+                            {
+                                event = EVENT_WRONG;
+                                M5.Lcd.fillRect(0, 0, 260, 60, TFT_DARKGREY);
+                                M5.Lcd.setCursor(15, 30);
+                                M5.Lcd.setTextColor(TFT_BLACK);
+                                M5.Lcd.setTextSize(2.5);
+                                M5.Display.print("Time out 2000ms"); // affichage timeout
+                                xSemaphoreGive(xSerialMutex);
+                            }
+                            else
+                            {
+                                String FormatStatePass = "str/" + IDhub + "/" + IDdigi + "/StatePass/";
+                                Serial.println("resp: " + resp);
+
+                                if (resp.startsWith(FormatStatePass) && resp.substring(FormatStatePass.length()) == "true")
+                                {
+                                    event = EVENT_GOOD;
+                                    xQueueSend(queueSound, &event, 0);
+                                    xSemaphoreGive(xSerialMutex);
+                                    GoodPass(InputUser, 15, 15);
+                                }
+                                else
+                                {
+                                    event = EVENT_WRONG;
+                                    xQueueSend(queueSound, &event, 0);
+                                    xSemaphoreGive(xSerialMutex);
+                                    ShakeWrongPass(InputUser, 15, 15);
+                                }
+                            }
+                        }
+                    }
+
+                    vTaskDelay(1000 / portTICK_PERIOD_MS);
+                    InputUser = "";
+                    UpdateDigit(InputUser);
+                }
+                else if ((tx >= 85 && tx <= 155) && (ty >= 84 && ty <= 136))
+                    PressButton(85, 84, 70, 52, "8", InputUser);
+                else if ((tx >= 85 && tx <= 155) && (ty >= 144 && ty <= 196))
+                    PressButton(85, 144, 70, 52, "5", InputUser);
+                else if ((tx >= 85 && tx <= 155) && (ty >= 204 && ty <= 256))
+                    PressButton(85, 204, 70, 52, "2", InputUser);
+                else if ((tx >= 85 && tx <= 155) && (ty >= 264 && ty <= 316))
+                    PressButton(85, 264, 70, 52, "0", InputUser);
+                else if ((tx >= 163 && tx <= 233) && (ty >= 84 && ty <= 136))
+                    PressButton(163, 84, 70, 52, "9", InputUser);
+                else if ((tx >= 163 && tx <= 233) && (ty >= 144 && ty <= 196))
+                    PressButton(163, 144, 70, 52, "6", InputUser);
+                else if ((tx >= 163 && tx <= 233) && (ty >= 204 && ty <= 256))
+                    PressButton(163, 204, 70, 52, "3", InputUser);
+                else if ((tx >= 163 && tx <= 233) && (ty >= 264 && ty <= 316))
+                {
+                    // retirer dernier caractere input user
+                    if (InputUser.length() > 0)
+                    {
+                        InputUser.remove(InputUser.length() - 1);
+                        UpdateDigit(InputUser);
+                    }
+                }
                 UpdateDigit(InputUser);
             }
         }
@@ -391,7 +413,21 @@ void TaskInput(void *pvParameters)
 
         if (M5.BtnA.isPressed())
         {
+            InputUser = "";
             DrawOptionMenu();
+        }
+        if (M5.BtnB.isPressed())
+        {
+        }
+        if (M5.BtnC.isPressed())
+        {
+            // eteindre digicode
+            /*M5.Lcd.setBrightness(0); // écran off
+            delay(2000);
+            M5.Lcd.setBrightness(128); // écran on*/
+
+            InputUser = "";
+            UpdateDigit(InputUser);
         }
 
         vTaskDelay(20 / portTICK_PERIOD_MS);
@@ -518,11 +554,72 @@ void DrawButton(int x1, int y1, int x2, int y2)
     M5.Lcd.drawRect(x1 + 1, y1 + 1, x2 - 2, y2 - 2, TFT_NAVY);
 }
 
+void DrawButtonColor(int x1, int y1, int x2, int y2, uint16_t color, uint16_t colorDark)
+{
+    M5.Lcd.fillRect(x1, y1, x2, y2, color);
+    M5.Lcd.drawRect(x1, y1, x2, y2, TFT_BLACK);
+    M5.Lcd.drawRect(x1 + 1, y1 + 1, x2 - 2, y2 - 2, colorDark);
+}
+
 void DrawButtons(void)
 {
-    int coords[36] = {7, 84, 70, 70, 7, 162, 70, 70, 7, 240, 70, 70, 85, 84, 70, 70, 85, 162, 70, 70, 85, 240, 70, 70, 163, 84, 70, 70, 163, 162, 70, 70, 163, 240, 70, 70};
-    for (int i = 0; i < 36; i += 4)
+    int coords[48] = {
+        7,
+        84,
+        70,
+        52,
+        7,
+        144,
+        70,
+        52,
+        7,
+        204,
+        70,
+        52,
+        7,
+        264,
+        70,
+        52,
+
+        85,
+        84,
+        70,
+        52,
+        85,
+        144,
+        70,
+        52,
+        85,
+        204,
+        70,
+        52,
+        85,
+        264,
+        70,
+        52,
+
+        163,
+        84,
+        70,
+        52,
+        163,
+        144,
+        70,
+        52,
+        163,
+        204,
+        70,
+        52,
+        163,
+        264,
+        70,
+        52,
+    };
+    for (int i = 0; i < 48; i += 4)
         DrawButton(coords[i], coords[i + 1], coords[i + 2], coords[i + 3]);
+
+    DrawButtonColor(7, 264, 70, 52, TFT_DARKGREEN, TFT_GREEN);
+    DrawButtonColor(163, 264, 70, 52, TFT_RED, TFT_MAROON);
 }
 
 void drawDigitNeon(int x, int y1, int num)
@@ -540,15 +637,34 @@ void drawDigitNeon(int x, int y1, int num)
 
 void drawAllDigitNeon(void)
 {
-    drawDigitNeon(189, 34, 7);
-    drawDigitNeon(189, 112, 8);
-    drawDigitNeon(189, 190, 9);
-    drawDigitNeon(111, 34, 4);
-    drawDigitNeon(111, 112, 5);
-    drawDigitNeon(111, 190, 6);
-    drawDigitNeon(33, 34, 1);
-    drawDigitNeon(33, 112, 2);
-    drawDigitNeon(33, 190, 3);
+    drawDigitNeon(196, 34, 7);
+    drawDigitNeon(196, 112, 8);
+    drawDigitNeon(196, 190, 9);
+
+    drawDigitNeon(136, 34, 4);
+    drawDigitNeon(136, 112, 5);
+    drawDigitNeon(136, 190, 6);
+
+    drawDigitNeon(76, 34, 1);
+    drawDigitNeon(76, 112, 2);
+    drawDigitNeon(76, 190, 3);
+
+    drawDigitNeonStr(16, 30, "OK");
+    drawDigitNeon(16, 112, 0);
+    drawDigitNeonStr(16, 175, "Del");
+}
+
+void drawDigitNeonStr(int x, int y1, String sym)
+{
+    M5.Lcd.setTextSize(3);
+    int newX = y1;
+    int newY = 320 - x - 24;
+    M5.Lcd.setTextColor(TFT_CYAN);
+    M5.Lcd.setCursor(newX + 1, newY + 1);
+    M5.Lcd.print(sym);
+    M5.Lcd.setTextColor(WHITE);
+    M5.Lcd.setCursor(newX, newY);
+    M5.Lcd.print(sym);
 }
 
 void UpdateDigit(String text)
@@ -699,27 +815,46 @@ void DrawOptionMenu(void)
     int optX[OPTION_COUNT] = {20, 130, 20, 130, 20, 130};
     int optY[OPTION_COUNT] = {60, 60, 140, 140, 220, 220};
 
-    String optLabels[OPTION_COUNT] = {
-        "Pairing", "Opt2",
-        "Opt3", "Opt4",
-        "Opt5", "Exit"};
+    String optLabels[OPTION_COUNT][2] = {
+        {"Pairing", ""},
+        {"Infos", "Sys"},
+        {"Test", "RFID"},
+        {"Hist", ""},
+        {"Opt5", ""},
+        {"Exit", ""}};
 
-    // Lambda de dessin du menu (réutilisé après retour d'une sous-page)
     auto DrawMenu = [&]()
     {
         M5.Lcd.fillScreen(TFT_BLACK);
         M5.Lcd.fillRect(0, 0, W, HEADER_H, TFT_BLUE);
         M5.Lcd.setTextDatum(MC_DATUM);
         M5.Lcd.setTextColor(TFT_WHITE, TFT_BLUE);
-        M5.Lcd.setTextSize(1);
-        M5.Lcd.drawString("Options", W / 2, HEADER_H / 2);
         M5.Lcd.setTextSize(2);
+        M5.Lcd.drawString("Options", W / 2, HEADER_H / 2);
+
         for (int i = 0; i < OPTION_COUNT; i++)
         {
             uint16_t c = (i == 5) ? TFT_DARKGREY : TFT_BLUE;
             M5.Lcd.fillRoundRect(optX[i], optY[i], O_W, O_H, O_R, c);
             M5.Lcd.setTextColor(TFT_WHITE, c);
-            M5.Lcd.drawString(optLabels[i], optX[i] + O_W / 2, optY[i] + O_H / 2);
+
+            if (optLabels[i][1] == "")
+            {
+                // Une seule ligne — centré verticalement
+                M5.Lcd.drawString(optLabels[i][0],
+                                  optX[i] + O_W / 2,
+                                  optY[i] + O_H / 2);
+            }
+            else
+            {
+                // Deux lignes — décalées autour du centre
+                M5.Lcd.drawString(optLabels[i][0],
+                                  optX[i] + O_W / 2,
+                                  optY[i] + O_H / 2 - 12);
+                M5.Lcd.drawString(optLabels[i][1],
+                                  optX[i] + O_W / 2,
+                                  optY[i] + O_H / 2 + 12);
+            }
         }
     };
 
@@ -730,14 +865,12 @@ void DrawOptionMenu(void)
     {
         M5.update();
         auto t = M5.Touch.getDetail();
-
         if (t.wasPressed())
         {
             int tx = t.x, ty = t.y;
             for (int i = 0; i < OPTION_COUNT; i++)
             {
-                if (tx >= optX[i] && tx <= optX[i] + O_W &&
-                    ty >= optY[i] && ty <= optY[i] + O_H)
+                if (tx >= optX[i] && tx <= optX[i] + O_W && ty >= optY[i] && ty <= optY[i] + O_H)
                 {
                     switch (i)
                     {
@@ -745,23 +878,23 @@ void DrawOptionMenu(void)
                         PagePairing();
                         break;
                     case 1:
-                        PageGenerique("Opt2", "Page Opt2");
+                        PageInfosSysteme();
                         break;
                     case 2:
-                        PageGenerique("Opt3", "Page Opt3");
+                        PageTestRFID();
                         break;
                     case 3:
-                        PageGenerique("Opt4", "Page Opt4");
+                        PageHistorique();
                         break;
                     case 4:
-                        PageGenerique("Opt5", "Page Opt5");
+                        PageGenerique("Opt5", "Page Vide");
                         break;
                     case 5:
                         running = false;
                         break;
                     }
                     if (running)
-                        DrawMenu(); // Redessine le menu au retour d'une sous-page
+                        DrawMenu();
                     delay(200);
                     break;
                 }
@@ -769,7 +902,6 @@ void DrawOptionMenu(void)
         }
         delay(5);
     }
-
     PrintDigi();
 }
 
@@ -789,7 +921,7 @@ void PagePairing(void)
     M5.Lcd.setTextColor(TFT_WHITE, TFT_DARKGREY);
     M5.Lcd.drawString("Retour", 120, 280);
 
-    pairing(); 
+    pairing();
     PrintDigi();
 }
 
@@ -825,6 +957,200 @@ void PageGenerique(String titre, String contenu)
         delay(10);
     }
 }
+
+void PageInfosSysteme()
+{
+    M5.Lcd.fillScreen(TFT_BLACK);
+    M5.Lcd.fillRect(0, 0, 240, 40, TFT_BLUE);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLUE);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.drawString("Infos Systeme", 120, 20);
+
+    M5.Lcd.setTextDatum(TL_DATUM);
+
+    struct
+    {
+        const char *label;
+        String value;
+        uint16_t color;
+    } rows[] = {
+        {"ID Digi", IDdigi, TFT_CYAN},
+        {"ID Hub", IDhub, TFT_CYAN},
+        {"Heap libre", String(ESP.getFreeHeap()) + " bytes", TFT_GREEN},
+        {"Heap min", String(ESP.getMinFreeHeap()) + " bytes", TFT_GREEN},
+        {"CPU freq", String(ESP.getCpuFreqMHz()) + " MHz", TFT_YELLOW},
+        {"Flash size", String(ESP.getFlashChipSize() / 1024) + " KB", TFT_YELLOW},
+        {"SDK version", String(ESP.getSdkVersion()), TFT_LIGHTGREY},
+    };
+
+    int y = 55;
+    for (auto &r : rows)
+    {
+        M5.Lcd.setTextSize(1.5);
+        M5.Lcd.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        M5.Lcd.setCursor(10, y);
+        M5.Lcd.print(r.label);
+
+        M5.Lcd.setTextColor(r.color, TFT_BLACK);
+        M5.Lcd.setCursor(10, y + 14);
+        M5.Lcd.print(r.value);
+        y += 30;
+    }
+
+    // Bouton retour
+    M5.Lcd.fillRoundRect(75, 268, 90, 40, 10, TFT_DARKGREY);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_DARKGREY);
+    M5.Lcd.drawString("Retour", 120, 288);
+
+    while (true)
+    {
+        M5.update();
+        auto p = M5.Touch.getDetail();
+        if (p.wasPressed() && p.x >= 75 && p.x <= 165 && p.y >= 268 && p.y <= 308)
+            return;
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+void PageTestRFID()
+{
+    M5.Lcd.fillScreen(TFT_BLACK);
+    M5.Lcd.fillRect(0, 0, 240, 40, TFT_BLUE);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLUE);
+    M5.Lcd.setTextSize(1.8);
+    M5.Lcd.drawString("Test RFID", 120, 20);
+
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    // M5.Lcd.setTextSize(1);
+    M5.Lcd.drawString("Approchez un badge", 120, 80);
+
+    // Zone résultat
+    M5.Lcd.fillRect(0, 100, 240, 160, TFT_DARKGREY);
+    M5.Lcd.setTextColor(TFT_LIGHTGREY, TFT_DARKGREY);
+    M5.Lcd.drawString("UID :", 120, 120);
+    M5.Lcd.drawString("-- -- -- --", 120, 145);
+    M5.Lcd.drawString("Taille UID :", 120, 170);
+    M5.Lcd.drawString("-- octets", 120, 190);
+    M5.Lcd.drawString("Type PICC :", 120, 215);
+    M5.Lcd.drawString("--", 120, 235);
+
+    // Bouton retour
+    M5.Lcd.fillRoundRect(75, 268, 90, 40, 10, TFT_DARKGREY);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_DARKGREY);
+    M5.Lcd.drawString("Retour", 120, 288);
+
+    while (true)
+    {
+        M5.update();
+
+        if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial())
+        {
+            String uid = "";
+            for (byte i = 0; i < mfrc522.uid.size; i++)
+                uid += String(mfrc522.uid.uidByte[i] < 0x10
+                                  ? " 0"
+                                  : " ") +
+                       String(mfrc522.uid.uidByte[i], HEX);
+            uid.toUpperCase();
+
+            MFRC522::PICC_Type piccType =
+                mfrc522.PICC_GetType(mfrc522.uid.sak);
+            String typeName =
+                String(mfrc522.PICC_GetTypeName(piccType));
+
+            // Rafraîchir zone résultat
+            M5.Lcd.fillRect(0, 100, 240, 160, TFT_DARKGREY);
+            M5.Lcd.setTextColor(TFT_GREEN, TFT_DARKGREY);
+            M5.Lcd.drawString("UID :", 120, 120);
+            M5.Lcd.setTextColor(TFT_WHITE, TFT_DARKGREY);
+            M5.Lcd.drawString(uid, 120, 145);
+            M5.Lcd.setTextColor(TFT_GREEN, TFT_DARKGREY);
+            M5.Lcd.drawString("Taille UID :", 120, 170);
+            M5.Lcd.setTextColor(TFT_WHITE, TFT_DARKGREY);
+            M5.Lcd.drawString(
+                String(mfrc522.uid.size) + " octets", 120, 190);
+            M5.Lcd.setTextColor(TFT_GREEN, TFT_DARKGREY);
+            M5.Lcd.drawString("Type PICC :", 120, 215);
+            M5.Lcd.setTextColor(TFT_WHITE, TFT_DARKGREY);
+
+            if (typeName.length() > 23)
+            {
+                // Chercher l'espace le plus proche du milieu
+                int mid = typeName.length() / 2;
+                int cutIndex = -1;
+
+                for (int i = 0; i <= mid; i++)
+                {
+                    if (mid - i >= 0 && typeName[mid - i] == ' ')
+                    {
+                        cutIndex = mid - i;
+                        break;
+                    }
+                    if (mid + i < typeName.length() && typeName[mid + i] == ' ')
+                    {
+                        cutIndex = mid + i;
+                        break;
+                    }
+                }
+
+                // Aucun espace trouvé → coupure dure au milieu
+                if (cutIndex == -1)
+                    cutIndex = mid;
+
+                String line1 = typeName.substring(0, cutIndex);
+                String line2 = typeName.substring(cutIndex + 1);
+                M5.Lcd.drawString(line1, 120, 228);
+                M5.Lcd.drawString(line2, 120, 244);
+            }
+            else
+            {
+                M5.Lcd.drawString(typeName, 120, 235);
+            }
+
+            M5.Speaker.tone(2000, 100);
+            mfrc522.PICC_HaltA();
+            mfrc522.PCD_StopCrypto1();
+        }
+
+        auto p = M5.Touch.getDetail();
+        if (p.wasPressed() && p.x >= 75 && p.x <= 165 && p.y >= 268 && p.y <= 308)
+            return;
+
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+void PageHistorique()
+{
+    M5.Lcd.fillScreen(TFT_BLACK);
+    M5.Lcd.fillRect(0, 0, 240, 40, TFT_BLUE);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLUE);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.drawString("Historique", 120, 20);
+
+    M5.Lcd.setTextDatum(TL_DATUM);
+    M5.Lcd.setTextSize(1);
+
+    // Bouton retour
+    M5.Lcd.fillRoundRect(75, 268, 90, 40, 10, TFT_DARKGREY);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_DARKGREY);
+    M5.Lcd.drawString("Retour", 120, 288);
+
+    while (true)
+    {
+        M5.update();
+        auto p = M5.Touch.getDetail();
+        if (p.wasPressed() && p.x >= 75 && p.x <= 165 && p.y >= 268 && p.y <= 308)
+            return;
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
 void PrintDigi(void)
 {
     // ===== RETOUR AU DIGICODE =====

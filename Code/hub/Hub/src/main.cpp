@@ -9,7 +9,7 @@
 #include <FastLED.h>
 
 constexpr uint16_t C_BG = TFT_BLACK;
-constexpr uint16_t C_RED = 0xFFE0, C_ORANGE = 0xE8E4, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
+constexpr uint16_t C_YELLOW = TFT_YELLOW, C_RED = TFT_RED, C_ORANGE = 0xE8E4, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
 constexpr uint16_t C_WHITE = TFT_WHITE;
 constexpr uint16_t C_OPT = 0x18E3;
 
@@ -81,8 +81,20 @@ enum Screen
     HOME,
     OPTIONS,
     ALARM,
-    PAIRING
+    PAIRING,
+    KEYPAD
 };
+
+constexpr int KP_BTN_W = 80;
+constexpr int KP_BTN_H = 35;
+constexpr int KP_GAP_X = 20;
+constexpr int KP_GAP_Y = 10;
+constexpr int KP_START_X = 20;
+constexpr int KP_START_Y = 60;
+
+String enteredPin = "";
+Screen previousScreenForKeypad = HOME;
+Button *bKp[12] = {nullptr};
 
 void drawAlarm();
 void initAlarmButtons();
@@ -107,6 +119,11 @@ void initPairingButtons();
 void handlePairingLogic();
 void BlinkLeds(void);
 void animateBtn(int x, int y, int w, int h, int r, uint16_t c);
+void initKeypadButtons();
+void drawKeypad();
+void updateKeypadHeader();
+void handleKeypadLogic();
+void handleAlarmLogic();
 
 Screen currentScreen = HOME;
 bool locked = false;
@@ -164,16 +181,22 @@ void drawHome() //* Affiche le menu home
         M5.Lcd.print(displayBuffer[i]);
     }
 
-    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_ORANGE);
-    M5.Lcd.setTextColor(C_WHITE, C_ORANGE);
+    uint16_t btnPanicColor = locked ? C_YELLOW : C_ORANGE;
+    uint16_t textPanicColor = locked ? BLACK : C_WHITE;
+    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, btnPanicColor);
+    M5.Lcd.setTextColor(textPanicColor, btnPanicColor);
     M5.Lcd.setTextDatum(BC_DATUM);
     M5.Lcd.drawString(locked ? "PANIC" : "Alarme", (C1_X + BTN_W / 2) + 25, 218);
     M5.Lcd.pushImage((C1_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)siren, 0x0000);
 
     M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
     M5.Lcd.setTextColor(C_WHITE, C_BLUE);
-    M5.Lcd.drawString("Options", (C2_X + BTN_W / 2) + 25, 218);
-    M5.Lcd.pushImage((C2_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)gear, 0x0000);
+    if (locked) {
+        M5.Lcd.drawString("Deverouiller", C2_X + BTN_W / 2, 218);
+    } else {
+        M5.Lcd.drawString("Options", (C2_X + BTN_W / 2) + 25, 218);
+        M5.Lcd.pushImage((C2_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)gear, 0x0000);
+    }
     xSemaphoreGive(lcdMutex);
 }
 
@@ -196,6 +219,15 @@ void clearButtons()
         {
             delete bOpts[i];
             bOpts[i] = nullptr;
+        }
+    }
+
+    for (int i = 0; i < 12; i++)
+    {
+        if (bKp[i])
+        {
+            delete bKp[i];
+            bKp[i] = nullptr;
         }
     }
 }
@@ -229,6 +261,11 @@ void setScreen(Screen s)
     {
         initPairingButtons();
         drawPairing();
+    }
+    else if (s == KEYPAD)
+    {
+        initKeypadButtons();
+        drawKeypad();
     }
 }
 
@@ -290,9 +327,9 @@ void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
 
     char *rfid = strrchr(buffer, '/') + 1;
 
-    t_message_lcd message;
+    /*t_message_lcd message;
     snprintf(message.msg, TRAME_SIZE, "Compare RFID");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
 
     String verif = compareRfid(rfid);
 
@@ -311,9 +348,9 @@ void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
 
     char *pwd = strrchr(buffer, '/') + 1;
 
-    t_message_lcd message;
+    /*t_message_lcd message;
     snprintf(message.msg, TRAME_SIZE, "Compare MDP");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
 
     String stringPWD = comparePwd(pwd);
 
@@ -334,9 +371,9 @@ void handleAskLenghtMDP(const String &IDhub, const String &IDdigi) //* Renvoie l
     String lstr = String((int)strlen(KEYBOARD_PWD));
     logSerial("%s", lstr);
 
-    t_message_lcd message;
-    snprintf(message.msg, TRAME_SIZE, "Demande MDP");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
+    /*t_message_lcd message;
+    snprintf(message.msg, TRAME_SIZE, "");
+    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
 
     Serial.println("str/" + IDhub + "/" + IDdigi + "/LenghtMDP/" + lstr);
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/LenghtMDP/" + lstr);
@@ -360,7 +397,7 @@ void handlePairing(char *buffer)
 {
     String line = buffer;
     Serial.println(line);
-    Serial.println("Appairing recu !");
+    Serial.println("Demande appairage recu !");
     if (line.startsWith("str/"))
     {
         int firstSlash = line.indexOf('/');
@@ -527,7 +564,7 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
             if (isImagePush == true && currentScreen != ALARM)
             {
                 xSemaphoreTake(lcdMutex, portMAX_DELAY);
-                uint16_t hBg = locked ? C_RED : C_DARKGREEN;
+                uint16_t hBg = locked ? C_YELLOW : C_DARKGREEN;
                 M5.Lcd.fillRect(0, 55, 35, 35, C_BG);
                 isImagePush = false;
                 xSemaphoreGive(lcdMutex);
@@ -596,7 +633,9 @@ void setup()
 
     Serial2.begin(9600, SERIAL_8N1, 13, 14);
     logSerial("Initialise");
+    logSerial("Adresse MAC HUB :");
     Serial.println(getMacFactory());
+    logSerial("Adresse MAC Clavier :");
     Serial.println(IDdigi);
 
     for (int i = 0; i < 4; i++)
@@ -656,13 +695,19 @@ void handleHomeLogic()
             logSerial("Bouton PANIC presse !");
             setScreen(ALARM);
         }
-        animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_RED);
+        animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_YELLOW);
     }
 
     if (bBlue && bBlue->wasReleased())
     {
         animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
-        setScreen(OPTIONS);
+        if (locked) {
+            previousScreenForKeypad = HOME;
+            enteredPin = "";
+            setScreen(KEYPAD);
+        } else {
+            setScreen(OPTIONS);
+        }
     }
 }
 
@@ -730,7 +775,9 @@ void loop()
 
     handleStateTransitions();
 
-    if (locked && currentScreen != ALARM) //*Fonction d'immage si alarme armée
+    bool intrusionActive = (currentScreen == ALARM) || (currentScreen == KEYPAD && previousScreenForKeypad == ALARM);
+
+    if (locked && !intrusionActive) //*Fonction d'image si alarme armée
     {
         fadeLeds();
     }
@@ -744,11 +791,19 @@ void loop()
         handleOptionsLogic();
         break;
     case ALARM:
-        BlinkLeds();
+        handleAlarmLogic();
         break;
     case PAIRING:
         handlePairingLogic();
         break;
+    case KEYPAD:
+        handleKeypadLogic();
+        break;
+    }
+
+    if (intrusionActive)
+    {
+        BlinkLeds();
     }
 }
 
@@ -838,7 +893,7 @@ void taskGestionLcd(void *pvParameters)
     }
 }
 
-void BlinkLeds(void) //* Faire clignoter la barre LED en rouge lors d'une intrusion
+void BlinkLeds(void) //* Faire clignoter la barre LED en jaune lors d'une intrusion
 {
     static unsigned long lastBlink = 0;
     static bool ledState = false;
@@ -861,50 +916,203 @@ void BlinkLeds(void) //* Faire clignoter la barre LED en rouge lors d'une intrus
     }
 }
 
-void fadeLeds(void) //* Faire clignoter la barre LED en rouge lors d'une intrusion
+void fadeLeds(void) //* Faire clignoter lentement la barre LED en rouge en mode alarme
 {
     static bool fading = true;
     static int fade = 255;
+    static unsigned long lastFadeUpdate = 0;
 
-    if (fading == true)
+    if (millis() - lastFadeUpdate > 100)
     {
-        fade--;
-        vTaskDelay(pdMS_TO_TICKS(100));
-        if (fade <= 0)
+        lastFadeUpdate = millis();
+
+        if (fading == true)
         {
-            fading = false;
-        }
-    }
-    else
-    {
-        {
-            fade++;
-            vTaskDelay(pdMS_TO_TICKS(100));
-            if (fade >= 25)
+            fade -= 2;
+            if (fade <= 0)
             {
+                fade = 0;
+                fading = false;
+            }
+        }
+        else
+        {
+            fade += 5;
+            if (fade >= 100)
+            {
+                fade = 100;
                 fading = true;
             }
         }
+        FastLED.setBrightness(fade);
+        fill_solid(leds, NUM_LEDS, CRGB::Red);
+        FastLED.show();
     }
-    FastLED.setBrightness(fade);
-    fill_solid(leds, NUM_LEDS, CRGB::Red);
-    FastLED.show();
+}
+
+void initKeypadButtons()
+{
+    clearButtons();
+    for (int i = 0; i < 12; i++)
+    {
+        int row = i / 3;
+        int col = i % 3;
+        int x = KP_START_X + col * (KP_BTN_W + KP_GAP_X);
+        int y = KP_START_Y + row * (KP_BTN_H + KP_GAP_Y);
+        char name[5];
+        sprintf(name, "K%d", i);
+        bKp[i] = new Button(x, y, KP_BTN_W, KP_BTN_H, false, name);
+    }
+}
+
+void drawKeypad()
+{
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+    M5.Lcd.fillScreen(C_BG);
+    
+    M5.Lcd.fillRect(0, 0, W, HEADER_H, C_BLUE);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
+    
+    String displayPin = "";
+    for (int i = 0; i < (int)enteredPin.length(); i++) displayPin += "*";
+    if (displayPin == "") displayPin = "Code PIN";
+    
+    M5.Lcd.drawString(displayPin, W / 2, HEADER_H / 2);
+    
+    const char* labels[12] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "Ret.", "0", "OK"};
+    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
+    for (int i = 0; i < 12; i++)
+    {
+        int row = i / 3;
+        int col = i % 3;
+        int x = KP_START_X + col * (KP_BTN_W + KP_GAP_X);
+        int y = KP_START_Y + row * (KP_BTN_H + KP_GAP_Y);
+        
+        uint16_t color = C_GREY;
+        if (i == 9) color = C_RED;
+        else if (i == 11) color = C_DARKGREEN;
+        
+        M5.Lcd.fillRoundRect(x, y, KP_BTN_W, KP_BTN_H, 5, color);
+        M5.Lcd.setTextColor(C_WHITE, color);
+        M5.Lcd.drawString(labels[i], x + KP_BTN_W / 2, y + KP_BTN_H / 2 + 2);
+    }
+    xSemaphoreGive(lcdMutex);
+}
+
+void updateKeypadHeader()
+{
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+
+    TFT_eSprite headerSprite = TFT_eSprite(&M5.Lcd);
+    headerSprite.createSprite(W, HEADER_H);
+    headerSprite.fillSprite(C_BLUE);
+    headerSprite.setFreeFont(&FreeSerifBold18pt7b);
+    headerSprite.setTextDatum(MC_DATUM);
+    headerSprite.setTextColor(C_WHITE, C_BLUE);
+    
+    String displayPin = "";
+    for (int i = 0; i < (int)enteredPin.length(); i++) displayPin += "*";
+    if (displayPin == "") displayPin = "Code PIN";
+    
+    headerSprite.drawString(displayPin, W / 2, HEADER_H / 2);
+    headerSprite.pushSprite(0, 0);
+    headerSprite.deleteSprite();
+    xSemaphoreGive(lcdMutex);
+}
+
+void handleKeypadLogic()
+{
+    for (int i = 0; i < 12; i++)
+    {
+        if (bKp[i] && bKp[i]->wasReleased())
+        {
+            int row = i / 3;
+            int col = i % 3;
+            int x = KP_START_X + col * (KP_BTN_W + KP_GAP_X);
+            int y = KP_START_Y + row * (KP_BTN_H + KP_GAP_Y);
+            
+            uint16_t color = C_GREY;
+            if (i == 9) color = C_RED;
+            else if (i == 11) color = C_DARKGREEN;
+            
+            animateBtn(x, y, KP_BTN_W, KP_BTN_H, 5, color);
+            
+            if (i == 9)
+            {
+                if (enteredPin.length() > 0) {
+                    enteredPin.remove(enteredPin.length() - 1);
+                    updateKeypadHeader();
+                } else {
+                    setScreen(previousScreenForKeypad);
+                }
+            }
+            else if (i == 11)
+            {
+                if (enteredPin == String(KEYBOARD_PWD))
+                {
+                    locked = false;
+                    enteredPin = "";
+                    setScreen(HOME);
+                }
+                else
+                {
+                    enteredPin = "";
+                    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+                    TFT_eSprite errorSprite = TFT_eSprite(&M5.Lcd);
+                    errorSprite.createSprite(W, HEADER_H);
+                    errorSprite.fillSprite(C_RED);
+                    errorSprite.setFreeFont(&FreeSerifBold18pt7b);
+                    errorSprite.setTextDatum(MC_DATUM);
+                    errorSprite.setTextColor(C_WHITE, C_RED);
+                    errorSprite.drawString("Code Errone", W / 2, HEADER_H / 2);
+                    errorSprite.pushSprite(0, 0);
+                    errorSprite.deleteSprite();
+                    xSemaphoreGive(lcdMutex);
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    updateKeypadHeader();
+                }
+            }
+            else
+            {
+                if (enteredPin.length() < 12)
+                {
+                    int digit = (i == 10) ? 0 : (i + 1);
+                    enteredPin += String(digit);
+                    updateKeypadHeader();
+                }
+            }
+        }
+    }
 }
 
 void initAlarmButtons()
 {
     clearButtons();
+    bLock = new Button(0, 0, W, H, false, "UnlockAlarm");
+}
+
+void handleAlarmLogic()
+{
+    if (bLock && bLock->wasReleased())
+    {
+        previousScreenForKeypad = ALARM;
+        enteredPin = "";
+        setScreen(KEYPAD);
+    }
 }
 
 void drawAlarm()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
-    M5.Lcd.fillScreen(C_RED);
+    M5.Lcd.fillScreen(C_YELLOW);
     M5.Lcd.setTextSize(1);
     M5.Lcd.setFreeFont(&FreeSans24pt7b);
     M5.Lcd.setTextDatum(MC_DATUM);
 
-    M5.Lcd.setTextColor(BLACK, C_RED);
+    M5.Lcd.setTextColor(BLACK, C_YELLOW);
     M5.Lcd.drawString("INTRUSION", W / 2, H / 2 - 20);
     M5.Lcd.setFreeFont(&FreeSerif12pt7b);
     M5.Lcd.drawString("Desactivation requise", W / 2, H / 2 + 30);
@@ -915,8 +1123,8 @@ void drawAlarm()
 void initPairingButtons()
 {
     clearButtons();
-    bOpts[0] = new Button(C1_X, R2_Y, BTN_W, R2_H, false, "Retour");
-    bOpts[1] = new Button(C2_X, R2_Y, BTN_W, R2_H, false, "Reappairer");
+    bOpts[0] = new Button(C2_X, R2_Y, BTN_W, R2_H, false, "Retour");
+    bOpts[1] = new Button(C1_X, R2_Y, BTN_W, R2_H, false, "Reappairer");
 }
 
 void drawPairing()
@@ -939,14 +1147,45 @@ void drawPairing()
     M5.Lcd.drawString("MAC Appaire :", W / 2, 140);
     M5.Lcd.drawString(isPairingMode ? "En attente..." : IDdigi, W / 2, 165);
 
-    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_GREY);
-    M5.Lcd.setTextColor(C_WHITE, C_GREY);
-    M5.Lcd.drawString("Retour", C1_X + BTN_W / 2, R2_Y + R2_H / 2);
-
     uint16_t pairColor = isPairingMode ? C_ORANGE : C_BLUE;
-    M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, pairColor);
+    M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, pairColor);
     M5.Lcd.setTextColor(C_WHITE, pairColor);
-    M5.Lcd.drawString(isPairingMode ? "Annuler" : "Reappairer", C2_X + BTN_W / 2, R2_Y + R2_H / 2);
+    M5.Lcd.drawString(isPairingMode ? "Annuler" : "Reappairer", C1_X + BTN_W / 2, R2_Y + R2_H / 2);
+
+    M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_GREY);
+    M5.Lcd.setTextColor(C_WHITE, C_GREY);
+    M5.Lcd.drawString("Retour", C2_X + BTN_W / 2, R2_Y + R2_H / 2);
+    xSemaphoreGive(lcdMutex);
+}
+
+void updatePairingStatus()
+{
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+    
+    // Sprite pour rafraîchir la zone de texte (adresse MAC)
+    TFT_eSprite textSprite = TFT_eSprite(&M5.Lcd);
+    textSprite.createSprite(W, 60);
+    textSprite.fillSprite(C_BG);
+    textSprite.setFreeFont(&FreeSerif12pt7b);
+    textSprite.setTextDatum(MC_DATUM);
+    textSprite.setTextColor(C_WHITE, C_BG);
+    textSprite.drawString("MAC Appaire :", W / 2, 15);
+    textSprite.drawString(isPairingMode ? "En attente..." : IDdigi, W / 2, 40);
+    textSprite.pushSprite(0, 125);
+    textSprite.deleteSprite();
+    
+    // Sprite pour rafraîchir uniquement le bouton
+    uint16_t pairColor = isPairingMode ? C_ORANGE : C_BLUE;
+    TFT_eSprite btnSprite = TFT_eSprite(&M5.Lcd);
+    btnSprite.createSprite(BTN_W, R2_H);
+    btnSprite.fillRoundRect(0, 0, BTN_W, R2_H, R2_R, pairColor);
+    btnSprite.setFreeFont(&FreeSerif12pt7b);
+    btnSprite.setTextDatum(MC_DATUM);
+    btnSprite.setTextColor(C_WHITE, pairColor);
+    btnSprite.drawString(isPairingMode ? "Annuler" : "Reappairer", BTN_W / 2, R2_H / 2);
+    btnSprite.pushSprite(C1_X, R2_Y);
+    btnSprite.deleteSprite();
+    
     xSemaphoreGive(lcdMutex);
 }
 
@@ -955,21 +1194,21 @@ void handlePairingLogic()
     if (bOpts[0] && bOpts[0]->wasReleased())
     {
         isPairingMode = false;
-        animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, C_GREY);
+        animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_GREY);
         setScreen(OPTIONS);
     }
     if (bOpts[1] && bOpts[1]->wasReleased())
     {
         isPairingMode = !isPairingMode;
 
-        if (isPairingMode)
+        /*if (isPairingMode)
         {
             // Oublie l'ancienne adresse MAC immédiatement
             IDdigi = "000000000000";
             preferences.putString("mac_digi", IDdigi);
-        }
+        }*/
 
-        animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, isPairingMode ? C_ORANGE : C_BLUE);
-        drawPairing();
+        animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, isPairingMode ? C_ORANGE : C_BLUE);
+        updatePairingStatus();
     }
 }

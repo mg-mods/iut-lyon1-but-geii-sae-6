@@ -5,6 +5,7 @@
 #include <utility/In_eSPI.h>
 #include <regex>
 #include <Preferences.h>
+#include <vector>
 #include "images.h"
 #include <FastLED.h>
 
@@ -13,8 +14,8 @@ constexpr uint16_t C_YELLOW = TFT_YELLOW, C_RED = TFT_RED, C_ORANGE = 0xE8E4, C_
 constexpr uint16_t C_WHITE = TFT_WHITE;
 constexpr uint16_t C_OPT = 0x18E3;
 
-const char *KEYBOARD_PWD = "1111";
-const char *RFID_PWD = " 39 72 34 94";
+String keyboardPwd = "1111";
+std::vector<String> rfidBadges;
 
 String IDdigi = "0000";
 String IDhub = "000000000000";
@@ -74,7 +75,7 @@ constexpr int OPTION_COUNT = 6;
 int optX[OPTION_COUNT] = {C1_X, C2_X, C1_X, C2_X, C1_X, C2_X};
 int optY[OPTION_COUNT] = {O_Y1, O_Y1, O_Y2, O_Y2, O_Y3, O_Y3};
 const char *optNames[OPTION_COUNT] = {"O1", "O2", "O3", "O4", "O5", "O6"};
-const char *optLabels[OPTION_COUNT] = {"Wifi", "Son", "Ecran", "Appairage", "Capteurs", "Retour"};
+const char *optLabels[OPTION_COUNT] = {"Mot de passe", "Son", "Ecran", "Appairage", "Badges RFID", "Retour"};
 
 enum Screen
 {
@@ -82,7 +83,9 @@ enum Screen
     OPTIONS,
     ALARM,
     PAIRING,
-    KEYPAD
+    KEYPAD,
+    CHANGE_PWD,
+    RFID_LIST
 };
 
 constexpr int KP_BTN_W = 80;
@@ -95,6 +98,16 @@ constexpr int KP_START_Y = 60;
 String enteredPin = "";
 Screen previousScreenForKeypad = HOME;
 Button *bKp[12] = {nullptr};
+
+enum PwdChangeStep { ENTER_OLD, ENTER_NEW, CONFIRM_NEW };
+PwdChangeStep pwdStep = ENTER_OLD;
+String tempNewPwd = "";
+
+Button *bRfidDel[4] = {nullptr};
+Button *bRfidPrev = nullptr;
+Button *bRfidNext = nullptr;
+Button *bRfidRet = nullptr;
+int rfidPage = 0;
 
 void drawAlarm();
 void initAlarmButtons();
@@ -124,6 +137,14 @@ void drawKeypad();
 void updateKeypadHeader();
 void handleKeypadLogic();
 void handleAlarmLogic();
+void drawChangePwd();
+void updateChangePwdHeader();
+void handleChangePwdLogic();
+void loadRFIDBadges();
+void saveRFIDBadges();
+void drawRfidList();
+void initRfidButtons();
+void handleRfidListLogic();
 
 Screen currentScreen = HOME;
 bool locked = false;
@@ -191,9 +212,12 @@ void drawHome() //* Affiche le menu home
 
     M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
     M5.Lcd.setTextColor(C_WHITE, C_BLUE);
-    if (locked) {
+    if (locked)
+    {
         M5.Lcd.drawString("Deverouiller", C2_X + BTN_W / 2, 218);
-    } else {
+    }
+    else
+    {
         M5.Lcd.drawString("Options", (C2_X + BTN_W / 2) + 25, 218);
         M5.Lcd.pushImage((C2_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)gear, 0x0000);
     }
@@ -230,6 +254,17 @@ void clearButtons()
             bKp[i] = nullptr;
         }
     }
+    for (int i = 0; i < 4; i++)
+    {
+        if (bRfidDel[i])
+        {
+            delete bRfidDel[i];
+            bRfidDel[i] = nullptr;
+        }
+    }
+    if (bRfidPrev) { delete bRfidPrev; bRfidPrev = nullptr; }
+    if (bRfidNext) { delete bRfidNext; bRfidNext = nullptr; }
+    if (bRfidRet) { delete bRfidRet; bRfidRet = nullptr; }
 }
 
 void initHomeButtons()
@@ -266,6 +301,16 @@ void setScreen(Screen s)
     {
         initKeypadButtons();
         drawKeypad();
+    }
+    else if (s == CHANGE_PWD)
+    {
+        initKeypadButtons();
+        drawChangePwd();
+    }
+    else if (s == RFID_LIST)
+    {
+        initRfidButtons();
+        drawRfidList();
     }
 }
 
@@ -368,7 +413,7 @@ void handleAskLenghtMDP(const String &IDhub, const String &IDdigi) //* Renvoie l
 {
     logSerial("Demande longueur MDP");
 
-    String lstr = String((int)strlen(KEYBOARD_PWD));
+    String lstr = String(keyboardPwd.length());
     logSerial("%s", lstr);
 
     /*t_message_lcd message;
@@ -439,7 +484,7 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
     char buffer[TRAME_SIZE];
     uint8_t i = 0;
 
-    static const std::regex re_ask_len("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskLenghtMDP/0");
+    static const std::regex re_ask_len("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskLenghtMDP/0"); //!Vérifier ce qu'on va en faire
     static const std::regex re_ask_state_alarm("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskStateAlarm/0");
     static const std::regex re_mdp_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/MDPInput/[0-9]{1,9}");
     static const std::regex re_rfid_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/RFIDInput/[ ,a-z,A-Z,0-9]{12,17}");
@@ -500,11 +545,11 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
                             logSerial("Appairage refuse: inactif");
                         }
                     }
-                else
-                {
-                    logSerial("ERREUR : ");
-                    logSerial(buffer);
-                }
+                    else
+                    {
+                        logSerial("ERREUR : ");
+                        logSerial(buffer);
+                    }
                     i = 0;
                 }
             }
@@ -618,7 +663,9 @@ void setup()
     FastLED.clear(true);       //* Eteindre tout au démarrage
 
     preferences.begin("preferences", false);
-    //preferences.putString("mac_digi", "000000000000"); //? Décommenter pour reset la mémoire
+    keyboardPwd = preferences.getString("keyboard_pwd", "1111");
+    loadRFIDBadges();
+    // preferences.putString("mac_digi", "000000000000"); //? Décommenter pour reset la mémoire
 
     IDhub = getMacFactory();
 
@@ -701,11 +748,14 @@ void handleHomeLogic()
     if (bBlue && bBlue->wasReleased())
     {
         animateBtn(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
-        if (locked) {
+        if (locked)
+        {
             previousScreenForKeypad = HOME;
             enteredPin = "";
             setScreen(KEYPAD);
-        } else {
+        }
+        else
+        {
             setScreen(OPTIONS);
         }
     }
@@ -726,6 +776,19 @@ void handleOptionsLogic()
             {
                 animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
                 setScreen(PAIRING);
+            }
+            else if (i == 4)
+            {
+                animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
+                rfidPage = 0;
+                setScreen(RFID_LIST);
+            }
+            else if (i == 0)
+            {
+                animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
+                pwdStep = ENTER_OLD;
+                enteredPin = "";
+                setScreen(CHANGE_PWD);
             }
             else
             {
@@ -781,6 +844,14 @@ void loop()
     {
         fadeLeds();
     }
+    else if (intrusionActive)
+    {
+        BlinkLeds();
+    }
+    else
+    {
+        FastLED.clear(true);
+    }
 
     switch (currentScreen)
     {
@@ -799,18 +870,20 @@ void loop()
     case KEYPAD:
         handleKeypadLogic();
         break;
+    case CHANGE_PWD:
+        handleChangePwdLogic();
+        break;
+    case RFID_LIST:
+        handleRfidListLogic();
+        break;
     }
 
-    if (intrusionActive)
-    {
-        BlinkLeds();
-    }
 }
 
 String comparePwd(const char *PWD) //* Comparateur de MDP lancée par handleMDPInput
 {
     String verif;
-    if (strcmp(PWD, KEYBOARD_PWD) == 0)
+    if (String(PWD) == keyboardPwd)
     {
         verif = "true";
         Serial.println("true");
@@ -825,13 +898,23 @@ String comparePwd(const char *PWD) //* Comparateur de MDP lancée par handleMDPI
 
 String compareRfid(const char *RFID) //* Comparateur de RFID lancée par handleRFIDInput
 {
-    String verif;
-    if (strcmp(RFID, RFID_PWD) == 0 && RFIDEnabled == true) //* Cas ou tout est bon
+    String verif = "false";
+    String rfidStr(RFID);
+    bool found = false;
+
+    for (size_t i = 0; i < rfidBadges.size(); i++) {
+        if (rfidStr == rfidBadges[i]) {
+            found = true;
+            break;
+        }
+    }
+
+    if (found && RFIDEnabled == true) //* Cas ou tout est bon
     {
         verif = "true";
         Serial.println("true");
     }
-    else if (strcmp(RFID, RFID_PWD) == 0 && ((digitalRead(faceDetector1) == 0 && digitalRead(faceDetector2) == 0))) //* Cas ou il n'y a pas de caméra avec le bon RFID
+    else if (found && ((digitalRead(faceDetector1) == 0 && digitalRead(faceDetector2) == 0))) //* Cas ou il n'y a pas de caméra avec le bon RFID
     {
         verif = "CamOFF";
         Serial.println("CamOFF");
@@ -893,6 +976,150 @@ void taskGestionLcd(void *pvParameters)
     }
 }
 
+void loadRFIDBadges()
+{
+    rfidBadges.clear();
+    String stored = preferences.getString("rfid_badges", " 39 72 34 94");
+    if (stored.length() > 0)
+    {
+        int start = 0;
+        int end = stored.indexOf(';');
+        while (end != -1)
+        {
+            rfidBadges.push_back(stored.substring(start, end));
+            start = end + 1;
+            end = stored.indexOf(';', start);
+        }
+        if (start < (int)stored.length())
+        {
+            rfidBadges.push_back(stored.substring(start));
+        }
+    }
+}
+
+void saveRFIDBadges()
+{
+    String toStore = "";
+    for (size_t i = 0; i < rfidBadges.size(); i++)
+    {
+        toStore += rfidBadges[i];
+        if (i < rfidBadges.size() - 1)
+            toStore += ";";
+    }
+    preferences.putString("rfid_badges", toStore);
+}
+
+void initRfidButtons()
+{
+    clearButtons();
+    int count = 0;
+    size_t endIdx = (rfidPage * 4 + 4 > rfidBadges.size()) ? rfidBadges.size() : (rfidPage * 4 + 4);
+    for (size_t i = rfidPage * 4; i < endIdx; i++)
+    {
+        int y = 60 + count * 35;
+        char name[10];
+        sprintf(name, "DEL%d", count);
+        bRfidDel[count] = new Button(250, y, 60, 32, false, name);
+        count++;
+    }
+    for (int i = count; i < 4; i++)
+    {
+        bRfidDel[i] = nullptr;
+    }
+    bRfidPrev = new Button(10, 200, 80, 35, false, "Prev");
+    bRfidNext = new Button(100, 200, 80, 35, false, "Next");
+    bRfidRet = new Button(190, 200, 120, 35, false, "Retour");
+}
+
+void drawRfidList()
+{
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+    M5.Lcd.fillScreen(C_BG);
+    M5.Lcd.fillRect(0, 0, W, HEADER_H, C_BLUE);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
+    M5.Lcd.drawString("Badges RFID", W / 2, HEADER_H / 2);
+
+    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
+    int count = 0;
+    size_t endIdx = (rfidPage * 4 + 4 > rfidBadges.size()) ? rfidBadges.size() : (rfidPage * 4 + 4);
+    for (size_t i = rfidPage * 4; i < endIdx; i++)
+    {
+        int y = 60 + count * 35;
+        M5.Lcd.setTextColor(C_WHITE, C_BG);
+        M5.Lcd.setTextDatum(ML_DATUM);
+        M5.Lcd.drawString(rfidBadges[i], 10, y + 16);
+
+        M5.Lcd.fillRoundRect(250, y, 60, 32, 5, C_RED);
+        M5.Lcd.setTextColor(C_WHITE, C_RED);
+        M5.Lcd.setTextDatum(MC_DATUM);
+        M5.Lcd.drawString("X", 280, y + 16);
+        count++;
+    }
+
+    M5.Lcd.fillRoundRect(10, 200, 80, 35, 5, C_BLUE);
+    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.drawString("<", 50, 217);
+
+    M5.Lcd.fillRoundRect(100, 200, 80, 35, 5, C_BLUE);
+    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
+    M5.Lcd.drawString(">", 140, 217);
+
+    M5.Lcd.fillRoundRect(190, 200, 120, 35, 5, C_GREY);
+    M5.Lcd.setTextColor(C_WHITE, C_GREY);
+    M5.Lcd.drawString("Retour", 250, 217);
+
+    xSemaphoreGive(lcdMutex);
+}
+
+void handleRfidListLogic()
+{
+    for (int i = 0; i < 4; i++)
+    {
+        if (bRfidDel[i] && bRfidDel[i]->wasReleased())
+        {
+            animateBtn(250, 60 + i * 35, 60, 32, 5, C_RED);
+            int actualIndex = rfidPage * 4 + i;
+            if (actualIndex < (int)rfidBadges.size())
+            {
+                rfidBadges.erase(rfidBadges.begin() + actualIndex);
+                saveRFIDBadges();
+                if (rfidPage > 0 && rfidPage * 4 >= (int)rfidBadges.size())
+                {
+                    rfidPage--;
+                }
+                setScreen(RFID_LIST); 
+            }
+        }
+    }
+    if (bRfidPrev && bRfidPrev->wasReleased())
+    {
+        if (rfidPage > 0)
+        {
+            animateBtn(10, 200, 80, 35, 5, C_BLUE);
+            rfidPage--;
+            setScreen(RFID_LIST);
+        }
+    }
+    if (bRfidNext && bRfidNext->wasReleased())
+    {
+        if ((rfidPage + 1) * 4 < (int)rfidBadges.size())
+        {
+            animateBtn(100, 200, 80, 35, 5, C_BLUE);
+            rfidPage++;
+            setScreen(RFID_LIST);
+        }
+    }
+    if (bRfidRet && bRfidRet->wasReleased())
+    {
+        animateBtn(190, 200, 120, 35, 5, C_GREY);
+        setScreen(OPTIONS);
+    }
+}
+
 void BlinkLeds(void) //* Faire clignoter la barre LED en jaune lors d'une intrusion
 {
     static unsigned long lastBlink = 0;
@@ -937,10 +1164,10 @@ void fadeLeds(void) //* Faire clignoter lentement la barre LED en rouge en mode 
         }
         else
         {
-            fade += 5;
-            if (fade >= 100)
+            fade += 2;
+            if (fade >= 50)
             {
-                fade = 100;
+                fade = 50;
                 fading = true;
             }
         }
@@ -969,20 +1196,22 @@ void drawKeypad()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.fillScreen(C_BG);
-    
+
     M5.Lcd.fillRect(0, 0, W, HEADER_H, C_BLUE);
     M5.Lcd.setTextSize(1);
     M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
     M5.Lcd.setTextDatum(MC_DATUM);
     M5.Lcd.setTextColor(C_WHITE, C_BLUE);
-    
+
     String displayPin = "";
-    for (int i = 0; i < (int)enteredPin.length(); i++) displayPin += "*";
-    if (displayPin == "") displayPin = "Code PIN";
-    
+    for (int i = 0; i < (int)enteredPin.length(); i++)
+        displayPin += "*";
+    if (displayPin == "")
+        displayPin = "Code PIN";
+
     M5.Lcd.drawString(displayPin, W / 2, HEADER_H / 2);
-    
-    const char* labels[12] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "Ret.", "0", "OK"};
+
+    const char *labels[12] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "Ret.", "0", "OK"};
     M5.Lcd.setFreeFont(&FreeSerif12pt7b);
     for (int i = 0; i < 12; i++)
     {
@@ -990,11 +1219,13 @@ void drawKeypad()
         int col = i % 3;
         int x = KP_START_X + col * (KP_BTN_W + KP_GAP_X);
         int y = KP_START_Y + row * (KP_BTN_H + KP_GAP_Y);
-        
+
         uint16_t color = C_GREY;
-        if (i == 9) color = C_RED;
-        else if (i == 11) color = C_DARKGREEN;
-        
+        if (i == 9)
+            color = C_RED;
+        else if (i == 11)
+            color = C_DARKGREEN;
+
         M5.Lcd.fillRoundRect(x, y, KP_BTN_W, KP_BTN_H, 5, color);
         M5.Lcd.setTextColor(C_WHITE, color);
         M5.Lcd.drawString(labels[i], x + KP_BTN_W / 2, y + KP_BTN_H / 2 + 2);
@@ -1012,11 +1243,13 @@ void updateKeypadHeader()
     headerSprite.setFreeFont(&FreeSerifBold18pt7b);
     headerSprite.setTextDatum(MC_DATUM);
     headerSprite.setTextColor(C_WHITE, C_BLUE);
-    
+
     String displayPin = "";
-    for (int i = 0; i < (int)enteredPin.length(); i++) displayPin += "*";
-    if (displayPin == "") displayPin = "Code PIN";
-    
+    for (int i = 0; i < (int)enteredPin.length(); i++)
+        displayPin += "*";
+    if (displayPin == "")
+        displayPin = "Code PIN";
+
     headerSprite.drawString(displayPin, W / 2, HEADER_H / 2);
     headerSprite.pushSprite(0, 0);
     headerSprite.deleteSprite();
@@ -1033,25 +1266,30 @@ void handleKeypadLogic()
             int col = i % 3;
             int x = KP_START_X + col * (KP_BTN_W + KP_GAP_X);
             int y = KP_START_Y + row * (KP_BTN_H + KP_GAP_Y);
-            
+
             uint16_t color = C_GREY;
-            if (i == 9) color = C_RED;
-            else if (i == 11) color = C_DARKGREEN;
-            
+            if (i == 9)
+                color = C_RED;
+            else if (i == 11)
+                color = C_DARKGREEN;
+
             animateBtn(x, y, KP_BTN_W, KP_BTN_H, 5, color);
-            
+
             if (i == 9)
             {
-                if (enteredPin.length() > 0) {
+                if (enteredPin.length() > 0)
+                {
                     enteredPin.remove(enteredPin.length() - 1);
                     updateKeypadHeader();
-                } else {
+                }
+                else
+                {
                     setScreen(previousScreenForKeypad);
                 }
             }
             else if (i == 11)
             {
-                if (enteredPin == String(KEYBOARD_PWD))
+                if (enteredPin == keyboardPwd)
                 {
                     locked = false;
                     enteredPin = "";
@@ -1116,7 +1354,7 @@ void drawAlarm()
     M5.Lcd.drawString("INTRUSION", W / 2, H / 2 - 20);
     M5.Lcd.setFreeFont(&FreeSerif12pt7b);
     M5.Lcd.drawString("Desactivation requise", W / 2, H / 2 + 30);
-    M5.Lcd.pushImage((W - 50) / 2, 20, 50, 50, (uint16_t *)siren, 0x0000);
+    M5.Lcd.pushImage((W - 50) / 2, 20, 50, 50, (uint16_t *)siren, TFT_WHITE);
     xSemaphoreGive(lcdMutex);
 }
 
@@ -1161,7 +1399,7 @@ void drawPairing()
 void updatePairingStatus()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
-    
+
     // Sprite pour rafraîchir la zone de texte (adresse MAC)
     TFT_eSprite textSprite = TFT_eSprite(&M5.Lcd);
     textSprite.createSprite(W, 60);
@@ -1173,7 +1411,7 @@ void updatePairingStatus()
     textSprite.drawString(isPairingMode ? "En attente..." : IDdigi, W / 2, 40);
     textSprite.pushSprite(0, 125);
     textSprite.deleteSprite();
-    
+
     // Sprite pour rafraîchir uniquement le bouton
     uint16_t pairColor = isPairingMode ? C_ORANGE : C_BLUE;
     TFT_eSprite btnSprite = TFT_eSprite(&M5.Lcd);
@@ -1185,7 +1423,7 @@ void updatePairingStatus()
     btnSprite.drawString(isPairingMode ? "Annuler" : "Reappairer", BTN_W / 2, R2_H / 2);
     btnSprite.pushSprite(C1_X, R2_Y);
     btnSprite.deleteSprite();
-    
+
     xSemaphoreGive(lcdMutex);
 }
 
@@ -1210,5 +1448,217 @@ void handlePairingLogic()
 
         animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, isPairingMode ? C_ORANGE : C_BLUE);
         updatePairingStatus();
+    }
+}
+
+void drawChangePwd()
+{
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+    M5.Lcd.fillScreen(C_BG);
+
+    M5.Lcd.fillRect(0, 0, W, HEADER_H, C_BLUE);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setFreeFont(&FreeSerifBold18pt7b);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(C_WHITE, C_BLUE);
+
+    String displayTitle = "";
+    if (pwdStep == ENTER_OLD) displayTitle = "Ancien PIN";
+    else if (pwdStep == ENTER_NEW) displayTitle = "Nouveau PIN";
+    else if (pwdStep == CONFIRM_NEW) displayTitle = "Confirmer PIN";
+    
+    String displayPin = "";
+    for (int i = 0; i < (int)enteredPin.length(); i++)
+        displayPin += "*";
+    if (displayPin == "")
+        displayPin = displayTitle;
+
+    M5.Lcd.drawString(displayPin, W / 2, HEADER_H / 2);
+
+    const char *labels[12] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "Ret.", "0", "OK"};
+    M5.Lcd.setFreeFont(&FreeSerif12pt7b);
+    for (int i = 0; i < 12; i++)
+    {
+        int row = i / 3;
+        int col = i % 3;
+        int x = KP_START_X + col * (KP_BTN_W + KP_GAP_X);
+        int y = KP_START_Y + row * (KP_BTN_H + KP_GAP_Y);
+
+        uint16_t color = C_GREY;
+        if (i == 9)
+            color = C_RED;
+        else if (i == 11)
+            color = C_DARKGREEN;
+
+        M5.Lcd.fillRoundRect(x, y, KP_BTN_W, KP_BTN_H, 5, color);
+        M5.Lcd.setTextColor(C_WHITE, color);
+        M5.Lcd.drawString(labels[i], x + KP_BTN_W / 2, y + KP_BTN_H / 2 + 2);
+    }
+    xSemaphoreGive(lcdMutex);
+}
+
+void updateChangePwdHeader()
+{
+    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+
+    TFT_eSprite headerSprite = TFT_eSprite(&M5.Lcd);
+    headerSprite.createSprite(W, HEADER_H);
+    headerSprite.fillSprite(C_BLUE);
+    headerSprite.setFreeFont(&FreeSerifBold18pt7b);
+    headerSprite.setTextDatum(MC_DATUM);
+    headerSprite.setTextColor(C_WHITE, C_BLUE);
+
+    String displayTitle = "";
+    if (pwdStep == ENTER_OLD) displayTitle = "Ancien PIN";
+    else if (pwdStep == ENTER_NEW) displayTitle = "Nouveau PIN";
+    else if (pwdStep == CONFIRM_NEW) displayTitle = "Confirmer PIN";
+
+    String displayPin = "";
+    for (int i = 0; i < (int)enteredPin.length(); i++)
+        displayPin += "*";
+    if (displayPin == "")
+        displayPin = displayTitle;
+
+    headerSprite.drawString(displayPin, W / 2, HEADER_H / 2);
+    headerSprite.pushSprite(0, 0);
+    headerSprite.deleteSprite();
+    xSemaphoreGive(lcdMutex);
+}
+
+void handleChangePwdLogic()
+{
+    for (int i = 0; i < 12; i++)
+    {
+        if (bKp[i] && bKp[i]->wasReleased())
+        {
+            int row = i / 3;
+            int col = i % 3;
+            int x = KP_START_X + col * (KP_BTN_W + KP_GAP_X);
+            int y = KP_START_Y + row * (KP_BTN_H + KP_GAP_Y);
+
+            uint16_t color = C_GREY;
+            if (i == 9) color = C_RED;
+            else if (i == 11) color = C_DARKGREEN;
+
+            animateBtn(x, y, KP_BTN_W, KP_BTN_H, 5, color);
+
+            if (i == 9)
+            {
+                if (enteredPin.length() > 0)
+                {
+                    enteredPin.remove(enteredPin.length() - 1);
+                    updateChangePwdHeader();
+                }
+                else
+                {
+                    setScreen(OPTIONS);
+                }
+            }
+            else if (i == 11)
+            {
+                if (pwdStep == ENTER_OLD)
+                {
+                    if (enteredPin == keyboardPwd)
+                    {
+                        pwdStep = ENTER_NEW;
+                        enteredPin = "";
+                        updateChangePwdHeader();
+                    }
+                    else
+                    {
+                        enteredPin = "";
+                        xSemaphoreTake(lcdMutex, portMAX_DELAY);
+                        TFT_eSprite errorSprite = TFT_eSprite(&M5.Lcd);
+                        errorSprite.createSprite(W, HEADER_H);
+                        errorSprite.fillSprite(C_RED);
+                        errorSprite.setFreeFont(&FreeSerifBold18pt7b);
+                        errorSprite.setTextDatum(MC_DATUM);
+                        errorSprite.setTextColor(C_WHITE, C_RED);
+                        errorSprite.drawString("Code Errone", W / 2, HEADER_H / 2);
+                        errorSprite.pushSprite(0, 0);
+                        errorSprite.deleteSprite();
+                        xSemaphoreGive(lcdMutex);
+                        vTaskDelay(pdMS_TO_TICKS(1000));
+                        updateChangePwdHeader();
+                    }
+                }
+                else if (pwdStep == ENTER_NEW)
+                {
+                    if (enteredPin.length() >= 4) // Contrainte de 4 caractères minimum (modifiable)
+                    {
+                        tempNewPwd = enteredPin;
+                        pwdStep = CONFIRM_NEW;
+                        enteredPin = "";
+                        updateChangePwdHeader();
+                    }
+                    else
+                    {
+                        enteredPin = "";
+                        xSemaphoreTake(lcdMutex, portMAX_DELAY);
+                        TFT_eSprite errorSprite = TFT_eSprite(&M5.Lcd);
+                        errorSprite.createSprite(W, HEADER_H);
+                        errorSprite.fillSprite(C_RED);
+                        errorSprite.setFreeFont(&FreeSerifBold18pt7b);
+                        errorSprite.setTextDatum(MC_DATUM);
+                        errorSprite.setTextColor(C_WHITE, C_RED);
+                        errorSprite.drawString("Trop court (>3)", W / 2, HEADER_H / 2);
+                        errorSprite.pushSprite(0, 0);
+                        errorSprite.deleteSprite();
+                        xSemaphoreGive(lcdMutex);
+                        vTaskDelay(pdMS_TO_TICKS(1000));
+                        updateChangePwdHeader();
+                    }
+                }
+                else if (pwdStep == CONFIRM_NEW)
+                {
+                    if (enteredPin == tempNewPwd)
+                    {
+                        keyboardPwd = enteredPin;
+                        preferences.putString("keyboard_pwd", keyboardPwd);
+                        
+                        xSemaphoreTake(lcdMutex, portMAX_DELAY);
+                        TFT_eSprite succSprite = TFT_eSprite(&M5.Lcd);
+                        succSprite.createSprite(W, HEADER_H);
+                        succSprite.fillSprite(C_DARKGREEN);
+                        succSprite.setFreeFont(&FreeSerifBold18pt7b);
+                        succSprite.setTextDatum(MC_DATUM);
+                        succSprite.setTextColor(C_WHITE, C_DARKGREEN);
+                        succSprite.drawString("PIN Modifie !", W / 2, HEADER_H / 2);
+                        succSprite.pushSprite(0, 0);
+                        succSprite.deleteSprite();
+                        xSemaphoreGive(lcdMutex);
+                        vTaskDelay(pdMS_TO_TICKS(1000));
+                        
+                        setScreen(OPTIONS);
+                    }
+                    else
+                    {
+                        enteredPin = "";
+                        xSemaphoreTake(lcdMutex, portMAX_DELAY);
+                        TFT_eSprite errorSprite = TFT_eSprite(&M5.Lcd);
+                        errorSprite.createSprite(W, HEADER_H);
+                        errorSprite.fillSprite(C_RED);
+                        errorSprite.setFreeFont(&FreeSerifBold18pt7b);
+                        errorSprite.setTextDatum(MC_DATUM);
+                        errorSprite.setTextColor(C_WHITE, C_RED);
+                        errorSprite.drawString("Ne correspond pas", W / 2, HEADER_H / 2);
+                        errorSprite.pushSprite(0, 0);
+                        errorSprite.deleteSprite();
+                        xSemaphoreGive(lcdMutex);
+                        vTaskDelay(pdMS_TO_TICKS(1000));
+                        updateChangePwdHeader();
+                    }
+                }
+            }
+            else
+            {
+                if (enteredPin.length() < 12)
+                {
+                    int digit = (i == 10) ? 0 : (i + 1);
+                    enteredPin += String(digit);
+                    updateChangePwdHeader();
+                }
+            }
+        }
     }
 }

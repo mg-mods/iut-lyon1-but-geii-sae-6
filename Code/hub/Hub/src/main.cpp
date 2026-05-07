@@ -9,42 +9,53 @@
 #include "images.h"
 #include <FastLED.h>
 
+// ============================================================================
+// CONSTANTES ET COULEURS
+// ============================================================================
 constexpr uint16_t C_BG = TFT_BLACK;
 constexpr uint16_t C_YELLOW = TFT_YELLOW, C_RED = TFT_RED, C_ORANGE = 0xE8E4, C_DARKGREEN = 0x0546, C_BLUE = 0x039F, C_GREY = 0x7BEF;
 constexpr uint16_t C_WHITE = TFT_WHITE;
 constexpr uint16_t C_OPT = 0x18E3;
 
-String keyboardPwd = "1111";
-std::vector<String> rfidBadges;
+// ============================================================================
+// VARIABLES GLOBALES ET CONFIGURATION
+// ============================================================================
+String keyboardPwd = "1111";    // Mot de passe par défaut
+std::vector<String> rfidBadges; // Liste des badges RFID enregistrés
 
-String IDdigi = "0000";
-String IDhub = "000000000000";
+String IDdigi = "0000";        // Adresse MAC du digicode appairé
+String IDhub = "000000000000"; // Adresse MAC locale du Hub
 
-uint8_t sensor1 = 19;
-uint8_t alarmSiren = 27;
-uint8_t faceDetector1 = 32;
-uint8_t faceDetector2 = 33;
-bool RFIDEnabled = false;
+// Configuration des broches pour les capteurs et actionneurs
+uint8_t sensor1 = 19;       // Broche du capteur de mouvement
+uint8_t alarmSiren = 27;    // Broche de contrôle de la sirène
+uint8_t faceDetector1 = 32; // Broche 1 de la détection faciale
+uint8_t faceDetector2 = 33; // Broche 2 de la détection faciale
+bool RFIDEnabled = false;   // Autorisation temporaire du RFID après détection faciale
 
-//* Configuration de la barre LED M5GO Bottom2
+// Configuration de la barre LED M5GO Bottom2
 #define LED_PIN 25
 #define NUM_LEDS 10
 CRGB leds[NUM_LEDS];
 
-#define USE_SERIAL2 //? Définir pour utiliser Serial2
-
+// Définition de l'interface série utilisée pour la communication
+#define USE_SERIAL2 // Définir pour utiliser Serial2
 #ifdef USE_SERIAL2
 #define SysSerial Serial2
 #else
 #define SysSerial Serial
 #endif
 
+// ============================================================================
+// DÉCLARATION DES FONCTIONS
+// ============================================================================
 void Serial_callback();
 String comparePwd(const char *PWD);
 String compareRfid(const char *RFID);
 void logSerial(const char *format, ...);
 void taskGestionLcd(void *pvParameters);
 
+// Structure pour la gestion de l'affichage des logs sur l'écran LCD
 constexpr int TRAME_SIZE = 128;
 constexpr int Ecart_Text = 20;
 
@@ -54,6 +65,7 @@ typedef struct t_message_lcd
     uint8_t ligne;
 } t_message_lcd;
 
+// Dimensions de l'écran et des éléments graphiques
 constexpr int W = 320, H = 240;
 constexpr int HEADER_H = 50, MGN = 10, GAP = 10;
 constexpr int BTN_W = (W - (MGN * 2) - GAP) / 2;
@@ -71,12 +83,14 @@ constexpr int O_Y1 = 60;
 constexpr int O_Y2 = O_Y1 + O_H + O_GAP_Y;
 constexpr int O_Y3 = O_Y2 + O_H + O_GAP_Y;
 
+// Boutons du menu d'options
 constexpr int OPTION_COUNT = 6;
 int optX[OPTION_COUNT] = {C1_X, C2_X, C1_X, C2_X, C1_X, C2_X};
 int optY[OPTION_COUNT] = {O_Y1, O_Y1, O_Y2, O_Y2, O_Y3, O_Y3};
 const char *optNames[OPTION_COUNT] = {"O1", "O2", "O3", "O4", "O5", "O6"};
 const char *optLabels[OPTION_COUNT] = {"Mot de passe", "Son", "Ecran", "Appairage", "Badges RFID", "Retour"};
 
+// Enumération des différents écrans (machine à états de l'interface)
 enum Screen
 {
     HOME,
@@ -88,6 +102,7 @@ enum Screen
     RFID_LIST
 };
 
+// Dimensions et espacements pour les pavés numériques (Keypad)
 constexpr int KP_BTN_W = 80;
 constexpr int KP_BTN_H = 35;
 constexpr int KP_GAP_X = 20;
@@ -99,19 +114,26 @@ String enteredPin = "";
 Screen previousScreenForKeypad = HOME;
 Button *bKp[12] = {nullptr};
 
-enum PwdChangeStep { ENTER_OLD, ENTER_NEW, CONFIRM_NEW };
+// Gestion du changement de mot de passe
+enum PwdChangeStep
+{
+    ENTER_OLD,
+    ENTER_NEW,
+    CONFIRM_NEW
+};
 PwdChangeStep pwdStep = ENTER_OLD;
 String tempNewPwd = "";
 
+// Boutons de la liste RFID
 Button *bRfidDel[4] = {nullptr};
 Button *bRfidPrev = nullptr;
 Button *bRfidNext = nullptr;
 Button *bRfidRet = nullptr;
 int rfidPage = 0;
 
+// Autres déclarations de fonctions
 void drawAlarm();
 void initAlarmButtons();
-
 void drawHome();
 void clearButtons();
 void initHomeButtons();
@@ -124,6 +146,7 @@ void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi);
 void handleAskLenghtMDP(const String &IDhub, const String &IDdigi);
 void handleAskStateAlarm(const String &IDhub, const String &IDdigi);
 void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi);
+void handleChangePwdKeyboard(char *buffer);
 void handlePairing(char *buffer);
 void taskTraiteTrame(void *pvParameters);
 void taskTraiteSensor(void *pvParameters);
@@ -147,24 +170,29 @@ void initRfidButtons();
 void handleRfidListLogic();
 
 Screen currentScreen = HOME;
-bool locked = false;
-bool isPairingMode = false;
+bool locked = false;        // État de l'alarme (activée ou non)
+bool isPairingMode = false; // Mode appairage en cours
 
-Preferences preferences;
+Preferences preferences; // Sauvegarde persistante (EEPROM/Flash)
 Button *bLock = nullptr;
 Button *bBlue = nullptr;
 Button *bOpts[OPTION_COUNT] = {nullptr};
-SemaphoreHandle_t lcdMutex = nullptr;
+SemaphoreHandle_t lcdMutex = nullptr; // Mutex pour protéger les accès concurrents à l'écran
 
 static QueueHandle_t queueReceptionSerie;
 static QueueHandle_t queueAffichage;
 char displayBuffer[4][TRAME_SIZE];
 
-void drawHome() //* Affiche le menu home
+// ============================================================================
+// DESSIN DES ÉCRANS
+// ============================================================================
+
+// Dessine l'écran d'accueil
+void drawHome()
 {
     uint16_t hBg = locked ? C_ORANGE : C_DARKGREEN;
 
-    xSemaphoreTake(lcdMutex, portMAX_DELAY);
+    xSemaphoreTake(lcdMutex, portMAX_DELAY); // Sécurise l'accès à l'écran
     M5.Lcd.fillScreen(C_BG);
     M5.Lcd.fillRect(0, 0, W, HEADER_H, hBg);
     M5.Lcd.setTextSize(1);
@@ -182,7 +210,7 @@ void drawHome() //* Affiche le menu home
         M5.Lcd.setTextColor(C_WHITE, hBg);
         M5.Lcd.drawString("Alarme Desactivee", W / 2, HEADER_H / 2);
 
-        //* Eteindre les LEDs quand l'alarme est désactivée
+        // Eteindre les LEDs quand l'alarme est désactivée
         FastLED.clear(true);
     }
 
@@ -191,6 +219,7 @@ void drawHome() //* Affiche le menu home
     M5.Lcd.setTextDatum(TC_DATUM);
     M5.Lcd.drawString(locked ? "Alarme en cours" : "Historique mouvements :", W / 2, 60);
 
+    // Affichage des logs d'historique
     M5.Lcd.fillRoundRect(MGN, R1_Y, W - (MGN * 2), R1_H, R1_R, C_GREY);
     M5.Lcd.setTextColor(C_WHITE, C_GREY);
     M5.Lcd.setTextSize(2);
@@ -202,6 +231,7 @@ void drawHome() //* Affiche le menu home
         M5.Lcd.print(displayBuffer[i]);
     }
 
+    // Bouton de gauche (Panic/Alarme)
     uint16_t btnPanicColor = locked ? C_YELLOW : C_ORANGE;
     uint16_t textPanicColor = locked ? BLACK : C_WHITE;
     M5.Lcd.fillRoundRect(C1_X, R2_Y, BTN_W, R2_H, R2_R, btnPanicColor);
@@ -210,6 +240,7 @@ void drawHome() //* Affiche le menu home
     M5.Lcd.drawString(locked ? "PANIC" : "Alarme", (C1_X + BTN_W / 2) + 25, 218);
     M5.Lcd.pushImage((C1_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)siren, 0x0000);
 
+    // Bouton de droite (Déverrouiller/Options)
     M5.Lcd.fillRoundRect(C2_X, R2_Y, BTN_W, R2_H, R2_R, C_BLUE);
     M5.Lcd.setTextColor(C_WHITE, C_BLUE);
     if (locked)
@@ -221,9 +252,10 @@ void drawHome() //* Affiche le menu home
         M5.Lcd.drawString("Options", (C2_X + BTN_W / 2) + 25, 218);
         M5.Lcd.pushImage((C2_X + (BTN_W - 50) / 2) - 43, R2_Y + (R2_H - 50) / 2, 50, 50, (uint16_t *)gear, 0x0000);
     }
-    xSemaphoreGive(lcdMutex);
+    xSemaphoreGive(lcdMutex); // Libère l'accès à l'écran
 }
 
+// Nettoie les objets Boutons de la mémoire avant chaque transition d'écran
 void clearButtons()
 {
     if (bLock)
@@ -262,9 +294,21 @@ void clearButtons()
             bRfidDel[i] = nullptr;
         }
     }
-    if (bRfidPrev) { delete bRfidPrev; bRfidPrev = nullptr; }
-    if (bRfidNext) { delete bRfidNext; bRfidNext = nullptr; }
-    if (bRfidRet) { delete bRfidRet; bRfidRet = nullptr; }
+    if (bRfidPrev)
+    {
+        delete bRfidPrev;
+        bRfidPrev = nullptr;
+    }
+    if (bRfidNext)
+    {
+        delete bRfidNext;
+        bRfidNext = nullptr;
+    }
+    if (bRfidRet)
+    {
+        delete bRfidRet;
+        bRfidRet = nullptr;
+    }
 }
 
 void initHomeButtons()
@@ -274,6 +318,7 @@ void initHomeButtons()
     bBlue = new Button(C2_X, R2_Y, BTN_W, R2_H, false, "B");
 }
 
+// Effectue la transition et initialise le nouvel écran
 void setScreen(Screen s)
 {
     currentScreen = s;
@@ -323,7 +368,8 @@ void initOptionsButtons()
     }
 }
 
-void drawOptions() //* Affiche le menu options
+// Dessine le menu des options
+void drawOptions()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.fillScreen(C_BG);
@@ -343,6 +389,7 @@ void drawOptions() //* Affiche le menu options
         M5.Lcd.fillRoundRect(optX[i], optY[i], O_W, O_H, O_R, btnColor);
         M5.Lcd.setTextColor(C_WHITE, btnColor);
 
+        // Option 5 est le bouton de retour
         if (i == 5)
         {
             M5.Lcd.drawString(optLabels[i], (optX[i] + O_W / 2) + 25, optY[i] + O_H / 2);
@@ -356,88 +403,120 @@ void drawOptions() //* Affiche le menu options
     xSemaphoreGive(lcdMutex);
 }
 
+// ============================================================================
+// GESTION DE LA COMMUNICATION SÉRIE ET COMMANDES DISTANTES
+// ============================================================================
+
+// Interruption lors de la réception de données série
 void Serial_callback()
 {
     char c;
     while (SysSerial.available() > 0)
     {
         c = SysSerial.read();
-        xQueueSendToBack(queueReceptionSerie, (void *)&c, portMAX_DELAY);
+        xQueueSendToBack(queueReceptionSerie, (void *)&c, portMAX_DELAY); // Ajoute à la queue RTOS
     }
 }
 
+// Traitement de la requête RFID entrante
 void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
 {
     Serial.println("Demande verif RFID");
 
-    char *rfid = strrchr(buffer, '/') + 1;
-
-    /*t_message_lcd message;
-    snprintf(message.msg, TRAME_SIZE, "Compare RFID");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
+    char *rfid = strrchr(buffer, '/') + 1; // Isole le badge RFID de la trame
 
     String verif = compareRfid(rfid);
 
-    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateRFID/" + verif);
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateRFID/" + verif); // Renvoie l'état
 
     if (verif == "true")
     {
-        locked = !locked;
+        locked = !locked; // Alterne l'état de l'alarme
         setScreen(HOME);
     }
 }
 
+// Traitement de la requête Mot de Passe entrante
 void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
 {
     Serial.println("Demande verif MDP");
 
-    char *pwd = strrchr(buffer, '/') + 1;
-
-    /*t_message_lcd message;
-    snprintf(message.msg, TRAME_SIZE, "Compare MDP");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
+    char *pwd = strrchr(buffer, '/') + 1; // Isole le MDP
 
     String stringPWD = comparePwd(pwd);
 
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
-    // Serial.println("str/" + IDhub + "/" + IDdigi + "/StatePass/" + stringPWD);
 
     if (stringPWD == "true")
     {
-        locked = !locked;
+        locked = !locked; // Alterne l'état de l'alarme
         setScreen(HOME);
     }
 }
 
-void handleAskLenghtMDP(const String &IDhub, const String &IDdigi) //* Renvoie la longueur du MDP(int) sur demande
+void handleChangePwdKeyboard(char *buffer)
+{
+    char *pwd = strrchr(buffer, '/') + 1; // Isole le MDP
+
+    keyboardPwd = pwd;
+    if (keyboardPwd == pwd)
+    {
+        preferences.putString("keyboard_pwd", keyboardPwd);
+        logSerial("Mot de passe change");
+        Serial2.println("str/" + IDhub + "/" + IDdigi + "/NewPass/true");
+    }
+    else
+    {
+        Serial2.println("str/" + IDhub + "/" + IDdigi + "/NewPass/false");
+    }
+}
+
+void handleAddRFID(char *buffer)
+{
+    char *rfid = strrchr(buffer, '/') + 1; // Isole le badge RFID de la trame
+    String rfidStr(rfid);
+
+    // Vérification si le badge est déjà enregistré
+    bool alreadyExists = false;
+    for (const String &b : rfidBadges) {
+        if (b == rfidStr) {
+            alreadyExists = true;
+            break;
+        }
+    }
+
+    if (!alreadyExists) {
+        rfidBadges.push_back(rfidStr);
+        saveRFIDBadges(); // Sauvegarde persistante en mémoire Flash
+        logSerial("Badge RFID ajoute : %s", rfid);
+        Serial2.println("str/" + IDhub + "/" + IDdigi + "/AddRFID/true");
+    } else {
+        logSerial("Badge RFID deja present : %s", rfid);
+        Serial2.println("str/" + IDhub + "/" + IDdigi + "/AddRFID/false");
+    }
+}
+
+// Renvoie la longueur du MDP(int) sur demande du périphérique distant
+void handleAskLenghtMDP(const String &IDhub, const String &IDdigi)
 {
     logSerial("Demande longueur MDP");
 
     String lstr = String(keyboardPwd.length());
     logSerial("%s", lstr);
 
-    /*t_message_lcd message;
-    snprintf(message.msg, TRAME_SIZE, "");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
-
     Serial.println("str/" + IDhub + "/" + IDdigi + "/LenghtMDP/" + lstr);
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/LenghtMDP/" + lstr);
 }
 
-void handleAskStateAlarm(const String &IDhub, const String &IDdigi) //* Renvoi l'état actuel de l'alarme(true/false) sur demande
+// Renvoie l'état actuel de l'alarme (true/false) sur demande
+void handleAskStateAlarm(const String &IDhub, const String &IDdigi)
 {
-    // logSerial("Demande etat alarme");
-
     String stringLocked = locked ? "true" : "false";
 
-    /*t_message_lcd message;
-    snprintf(message.msg, TRAME_SIZE, "Demande State Alarm");
-    xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);*/
-
     Serial2.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
-    // Serial.println("str/" + IDhub + "/" + IDdigi + "/StateAlarm/" + stringLocked);
 }
 
+// Gère le processus d'appairage d'un nouveau périphérique (Clavier/Digicode)
 void handlePairing(char *buffer)
 {
     String line = buffer;
@@ -452,7 +531,7 @@ void handlePairing(char *buffer)
         {
             IDdigi = line.substring(firstSlash + 1, secondSlash);
         }
-        preferences.putString("mac_digi", IDdigi);
+        preferences.putString("mac_digi", IDdigi); // Sauvegarde persistante de la MAC du digicode
 
         Serial2.println("str/" + IDhub + "/" + IDdigi + "/pairing/0");
         Serial.println("str/" + IDhub + "/" + IDdigi + "/pairing/0");
@@ -462,10 +541,11 @@ void handlePairing(char *buffer)
 
     if (currentScreen == PAIRING)
     {
-        drawPairing();
+        drawPairing(); // Actualise l'écran
     }
 }
 
+// Récupère l'adresse MAC usine (utilisée comme ID du Hub)
 String getMacFactory(void)
 {
     uint8_t mac[6];
@@ -479,12 +559,17 @@ String getMacFactory(void)
     return String(macStr);
 }
 
-void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réceptions série
+// Tâche RTOS : Analyse continue des trames série reçues
+void taskTraiteTrame(void *pvParameters)
 {
     char buffer[TRAME_SIZE];
     uint8_t i = 0;
 
-    static const std::regex re_ask_len("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskLenghtMDP/0"); //!Vérifier ce qu'on va en faire
+    // Expressions régulières pour analyser les requêtes reçues du périphérique distant
+    static const std::regex re_ask_len("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskLenghtMDP/0");
+    static const std::regex re_change_pwd("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/NewPass/[0-9]{1,9}");
+    static const std::regex re_add_rfid("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AddRFID/[ ,a-z,A-Z,0-9]{12,17}");
+    static const std::regex re_del_rfid("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/DelRFID/[ ,a-z,A-Z,0-9]{12,17}");
     static const std::regex re_ask_state_alarm("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskStateAlarm/0");
     static const std::regex re_mdp_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/MDPInput/[0-9]{1,9}");
     static const std::regex re_rfid_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/RFIDInput/[ ,a-z,A-Z,0-9]{12,17}");
@@ -494,56 +579,56 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
     {
         if (xQueueReceive(queueReceptionSerie, (void *)&buffer[i], portMAX_DELAY))
         {
-            if (buffer[i] == '\r' || buffer[i] == '\n')
+            if (buffer[i] == '\r' || buffer[i] == '\n') // Fin de la trame
             {
                 buffer[i] = '\0';
 
                 if (i > 0)
                 {
-                    if (checkMACisInROM(buffer) == true)
+                    if (checkMACisInROM(buffer) == true) // Protège contre les digicodes non appairés
                     {
                         if (strcmp(buffer, "E") == 0)
                         {
                             logSerial("E");
                         }
-                        else if (std::regex_match(std::string(buffer), re_ask_len)) // Demande longueur MDP
+                        else if (std::regex_match(std::string(buffer), re_ask_len))
                         {
                             handleAskLenghtMDP(IDhub, IDdigi);
                         }
-                        else if (std::regex_match(std::string(buffer), re_ask_state_alarm)) // Demande vérifier MDP
+                        else if (std::regex_match(std::string(buffer), re_change_pwd))
+                        {
+                            handleChangePwdKeyboard(buffer);
+                        }
+                        else if (std::regex_match(std::string(buffer), re_add_rfid))
+                        {
+                            handleAddRFID(buffer);
+                        }
+                        else if (std::regex_match(std::string(buffer), re_ask_state_alarm))
                         {
                             handleAskStateAlarm(IDhub, IDdigi);
                         }
-                        else if (std::regex_match(std::string(buffer), re_mdp_input)) // Demande vérifier MDP
+                        else if (std::regex_match(std::string(buffer), re_mdp_input))
                         {
                             handleMDPInput(buffer, IDhub, IDdigi);
                         }
-                        else if (std::regex_match(std::string(buffer), re_rfid_input)) // Demande vérifier RFID
+                        else if (std::regex_match(std::string(buffer), re_rfid_input))
                         {
                             handleRFIDInput(buffer, IDhub, IDdigi);
                         }
                         else if (std::regex_match(std::string(buffer), re_pairing))
                         {
                             if (isPairingMode)
-                            {
                                 handlePairing(buffer);
-                            }
                             else
-                            {
                                 logSerial("Appairage refuse: inactif");
-                            }
                         }
                     }
-                    else if (std::regex_match(std::string(buffer), re_pairing))
+                    else if (std::regex_match(std::string(buffer), re_pairing)) // Digicode inconnu demandant un appairage
                     {
                         if (isPairingMode)
-                        {
                             handlePairing(buffer);
-                        }
                         else
-                        {
                             logSerial("Appairage refuse: inactif");
-                        }
                     }
                     else
                     {
@@ -558,13 +643,14 @@ void taskTraiteTrame(void *pvParameters) //* Traitement et redirection des réce
                 if (i < TRAME_SIZE - 1)
                     i++;
                 else
-                    i = 0; //* Protection débordement buffer
+                    i = 0; // Protection contre le débordement de buffer
             }
         }
     }
 }
 
-void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
+// Tâche RTOS : Gestion des capteurs physiques (Mouvement, Reconnaissance Faciale, Sirène)
+void taskTraiteSensor(void *pvParameters)
 {
     pinMode(sensor1, INPUT);
     pinMode(alarmSiren, OUTPUT);
@@ -576,10 +662,10 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
 
     while (1)
     {
-        if (digitalRead(sensor1) != 1) //! Si un capteur detecte un mvt
+        if (digitalRead(sensor1) != 1) // Si un capteur detecte un mouvement
         {
 
-            if (isAlreadyDetected == false) //* N'affiche le message de detection qu'une fois
+            if (isAlreadyDetected == false) // N'affiche le message de detection qu'une fois
             {
                 logSerial("Mvt detectee");
                 t_message_lcd message;
@@ -589,7 +675,7 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
             }
 
             vTaskDelay(pdMS_TO_TICKS(50));
-            if (currentScreen != ALARM) //* Afficher le logo de mvt
+            if (currentScreen != ALARM) // Affiche le logo de mouvement à l'écran
             {
                 xSemaphoreTake(lcdMutex, portMAX_DELAY);
                 M5.Lcd.pushImage(10, 57, 25, 25, (uint16_t *)motion_detector, 0x0000);
@@ -597,7 +683,7 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
                 xSemaphoreGive(lcdMutex);
             }
 
-            if (locked == true && currentScreen != ALARM) //* Mettre l'ecran d'alarme
+            if (locked == true && currentScreen != ALARM) // Déclenchement de l'alarme
             {
                 setScreen(ALARM);
             }
@@ -606,7 +692,7 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
         }
         else
         {
-            if (isImagePush == true && currentScreen != ALARM)
+            if (isImagePush == true && currentScreen != ALARM) // Efface l'icone de mouvement
             {
                 xSemaphoreTake(lcdMutex, portMAX_DELAY);
                 uint16_t hBg = locked ? C_YELLOW : C_DARKGREEN;
@@ -618,22 +704,28 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
 
             vTaskDelay(pdMS_TO_TICKS(10));
         }
-        if (currentScreen == ALARM) //! Gestion de la sirène lors de l'alarme intrusion
+
+        // Gestion de la sirène
+        if (currentScreen == ALARM)
         {
-            digitalWrite(alarmSiren, LOW);
+            digitalWrite(alarmSiren, LOW); // Déclenche
             vTaskDelay(pdMS_TO_TICKS(100));
         }
         else
         {
-            digitalWrite(alarmSiren, HIGH);
+            digitalWrite(alarmSiren, HIGH); // Arrête
             vTaskDelay(pdMS_TO_TICKS(100));
         }
-        if (digitalRead(faceDetector1) == 1 && digitalRead(faceDetector2) == 0) //! Gestion de la reconnaissance faciale
+
+        // Gestion de la reconnaissance faciale
+        if (digitalRead(faceDetector1) == 1 && digitalRead(faceDetector2) == 0)
         {
             RFIDEnabled = true;
             logSerial("Visage connu detectee");
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
+
+        // Timeout de l'autorisation RFID (10 secondes)
         if (RFIDEnabled == true)
         {
             vTaskDelay(pdMS_TO_TICKS(10000));
@@ -642,7 +734,8 @@ void taskTraiteSensor(void *pvParameters) //* Traitement des capteurs
     }
 }
 
-void animateBtn(int x, int y, int w, int h, int r, uint16_t c) //* Mettre des animation lors de l'appui sur boutons
+// Fonction d'animation de retour visuel lors de l'appui sur un bouton
+void animateBtn(int x, int y, int w, int h, int r, uint16_t c)
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
     M5.Lcd.drawRoundRect(x, y, w, h, r, C_WHITE);
@@ -653,24 +746,26 @@ void animateBtn(int x, int y, int w, int h, int r, uint16_t c) //* Mettre des an
     xSemaphoreGive(lcdMutex);
 }
 
+// ============================================================================
+// INITIALISATION / SETUP
+// ============================================================================
 void setup()
 {
     M5.begin();
 
     // Initialisation de la barre LED
     FastLED.addLeds<SK6812, LED_PIN, GRB>(leds, NUM_LEDS);
-    FastLED.setBrightness(50); //* Luminosité (0-255)
-    FastLED.clear(true);       //* Eteindre tout au démarrage
+    FastLED.setBrightness(50); // Luminosité (0-255)
+    FastLED.clear(true);       // Eteindre tout au démarrage
 
+    // Chargement de la configuration depuis la mémoire persistante (NVS)
     preferences.begin("preferences", false);
     keyboardPwd = preferences.getString("keyboard_pwd", "1111");
     loadRFIDBadges();
-    // preferences.putString("mac_digi", "000000000000"); //? Décommenter pour reset la mémoire
 
     IDhub = getMacFactory();
 
-    locked = preferences.getBool("mon_booleen", false);
-    //* Récupérer l'écran et l'état de l'alarme
+    // Récupérer l'état sauvegardé de l'alarme
     locked = preferences.getBool("locked_state", false);
     IDdigi = preferences.getString("mac_digi", "default");
 
@@ -678,7 +773,7 @@ void setup()
 
     lcdMutex = xSemaphoreCreateMutex();
 
-    Serial2.begin(9600, SERIAL_8N1, 13, 14);
+    Serial2.begin(9600, SERIAL_8N1, 13, 14); // Port série dédié au digicode
     logSerial("Initialise");
     logSerial("Adresse MAC HUB :");
     Serial.println(getMacFactory());
@@ -690,24 +785,28 @@ void setup()
         displayBuffer[i][0] = '\0';
     }
 
-    //* Initialiser l'affichage sur l'écran sauvegardé
+    // Initialiser l'affichage sur l'écran sauvegardé avant redémarrage
     setScreen(savedScreen);
 
+    // Initialisation du module RTC intégré
     RTC_TimeTypeDef TimeStruct;
     TimeStruct.Hours = 15;
     TimeStruct.Minutes = 5;
     TimeStruct.Seconds = 47;
     M5.Rtc.SetTime(&TimeStruct);
 
+    // Initialisation des queues FreeRTOS
     queueReceptionSerie = xQueueCreate(TRAME_SIZE, sizeof(char));
     queueAffichage = xQueueCreate(3, sizeof(t_message_lcd));
     SysSerial.onReceive(Serial_callback);
 
+    // Lancement des différentes Tâches FreeRTOS sur les coeurs de l'ESP32
     xTaskCreatePinnedToCore(taskTraiteTrame, "TraiteTrame", 8192, nullptr, 2, nullptr, 0);
     xTaskCreatePinnedToCore(taskGestionLcd, "GestionLCD", 8192, nullptr, 1, nullptr, 1);
     xTaskCreatePinnedToCore(taskTraiteSensor, "TraiteSensor", 8192, nullptr, 3, nullptr, 0);
 }
 
+// Fonction utilitaire pour sauvegarder l'état et l'écran actif
 void handleStateTransitions()
 {
     static bool previousLocked = locked;
@@ -727,6 +826,7 @@ void handleStateTransitions()
     }
 }
 
+// Logique gérant l'écran d'accueil
 void handleHomeLogic()
 {
     if (bLock && bLock->wasReleased())
@@ -752,38 +852,39 @@ void handleHomeLogic()
         {
             previousScreenForKeypad = HOME;
             enteredPin = "";
-            setScreen(KEYPAD);
+            setScreen(KEYPAD); // Affiche le pavé numérique pour déverrouiller
         }
         else
         {
-            setScreen(OPTIONS);
+            setScreen(OPTIONS); // Affiche le menu des paramètres
         }
     }
 }
 
+// Logique du menu principal des options
 void handleOptionsLogic()
 {
     for (int i = 0; i < OPTION_COUNT; i++)
     {
         if (bOpts[i] && bOpts[i]->wasReleased())
         {
-            if (i == 5)
+            if (i == 5) // Retour
             {
                 animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_GREY);
                 setScreen(HOME);
             }
-            else if (i == 3)
+            else if (i == 3) // Appairage
             {
                 animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
                 setScreen(PAIRING);
             }
-            else if (i == 4)
+            else if (i == 4) // Badges RFID
             {
                 animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
                 rfidPage = 0;
                 setScreen(RFID_LIST);
             }
-            else if (i == 0)
+            else if (i == 0) // Changement Mot de Passe
             {
                 animateBtn(optX[i], optY[i], O_W, O_H, O_R, C_OPT);
                 pwdStep = ENTER_OLD;
@@ -798,6 +899,7 @@ void handleOptionsLogic()
     }
 }
 
+// Vérifie si l'adresse MAC transmise par la trame série est la bonne
 bool checkMACisInROM(char *buffer)
 {
     String line = buffer;
@@ -830,21 +932,22 @@ bool checkMACisInROM(char *buffer)
     }
 }
 
+// Boucle principale (Machine à état de l'UI et animations LED)
 void loop()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
-    M5.update();
+    M5.update(); // Met à jour l'état des composants matériels M5Stack (Touch, Boutons, etc)
     xSemaphoreGive(lcdMutex);
 
     handleStateTransitions();
 
     bool intrusionActive = (currentScreen == ALARM) || (currentScreen == KEYPAD && previousScreenForKeypad == ALARM);
 
-    if (locked && !intrusionActive) //*Fonction d'image si alarme armée
+    if (locked && !intrusionActive) // Fonction d'animation visuelle si alarme armée
     {
         fadeLeds();
     }
-    else if (intrusionActive)
+    else if (intrusionActive) // Effet sirène si intrusion
     {
         BlinkLeds();
     }
@@ -877,10 +980,10 @@ void loop()
         handleRfidListLogic();
         break;
     }
-
 }
 
-String comparePwd(const char *PWD) //* Comparateur de MDP lancée par handleMDPInput
+// Comparateur de Mot de passe appelé par handleMDPInput
+String comparePwd(const char *PWD)
 {
     String verif;
     if (String(PWD) == keyboardPwd)
@@ -896,30 +999,33 @@ String comparePwd(const char *PWD) //* Comparateur de MDP lancée par handleMDPI
     return verif;
 }
 
-String compareRfid(const char *RFID) //* Comparateur de RFID lancée par handleRFIDInput
+// Comparateur de tag RFID appelé par handleRFIDInput
+String compareRfid(const char *RFID)
 {
     String verif = "false";
     String rfidStr(RFID);
     bool found = false;
 
-    for (size_t i = 0; i < rfidBadges.size(); i++) {
-        if (rfidStr == rfidBadges[i]) {
+    for (size_t i = 0; i < rfidBadges.size(); i++)
+    {
+        if (rfidStr == rfidBadges[i])
+        {
             found = true;
             break;
         }
     }
 
-    if (found && RFIDEnabled == true) //* Cas ou tout est bon
+    if (found && RFIDEnabled == true) // Cas ou le badge et le visage sont confirmés
     {
         verif = "true";
         Serial.println("true");
     }
-    else if (found && ((digitalRead(faceDetector1) == 0 && digitalRead(faceDetector2) == 0))) //* Cas ou il n'y a pas de caméra avec le bon RFID
+    else if (found && ((digitalRead(faceDetector1) == 0 && digitalRead(faceDetector2) == 0))) // Badge Ok mais échec/absence caméra
     {
         verif = "CamOFF";
         Serial.println("CamOFF");
     }
-    else //* Autres cas
+    else // Autres cas (badge inconnu, etc.)
     {
         verif = "false";
         Serial.println("false");
@@ -927,7 +1033,8 @@ String compareRfid(const char *RFID) //* Comparateur de RFID lancée par handleR
     return verif;
 }
 
-void logSerial(const char *format, ...) //* Renvoie un texte en serie vers le PC(USB) avec horodatage
+// Formate et renvoie une trace série vers le PC (via USB) avec horodatage
+void logSerial(const char *format, ...)
 {
     char buffer[128];
     va_list args;
@@ -940,6 +1047,7 @@ void logSerial(const char *format, ...) //* Renvoie un texte en serie vers le PC
     Serial.printf("[%02d:%02d:%02d] %s\n", TimeStruct.Hours, TimeStruct.Minutes, TimeStruct.Seconds, buffer);
 }
 
+// Tâche RTOS : Pilote l'affichage des logs en fond d'écran d'accueil
 void taskGestionLcd(void *pvParameters)
 {
     t_message_lcd msg;
@@ -949,9 +1057,11 @@ void taskGestionLcd(void *pvParameters)
 
     while (true)
     {
+        // Ne met à jour que si on est sur l'écran d'accueil
         if (xQueueReceive(queueAffichage, (void *)&msg, portMAX_DELAY) && currentScreen == HOME)
         {
             xSemaphoreTake(lcdMutex, portMAX_DELAY);
+            // Décalage fifo des lignes
             strcpy(displayBuffer[0], displayBuffer[1]);
             strcpy(displayBuffer[1], displayBuffer[2]);
             strcpy(displayBuffer[2], displayBuffer[3]);
@@ -976,6 +1086,7 @@ void taskGestionLcd(void *pvParameters)
     }
 }
 
+// Parse la chaîne stockée en NVS en vecteur de chaînes de caractères
 void loadRFIDBadges()
 {
     rfidBadges.clear();
@@ -997,6 +1108,7 @@ void loadRFIDBadges()
     }
 }
 
+// Convertit le vecteur de badge en une chaîne compacte et le stocke en NVS
 void saveRFIDBadges()
 {
     String toStore = "";
@@ -1019,7 +1131,7 @@ void initRfidButtons()
         int y = 60 + count * 35;
         char name[10];
         sprintf(name, "DEL%d", count);
-        bRfidDel[count] = new Button(250, y, 60, 32, false, name);
+        bRfidDel[count] = new Button(250, y, 60, 32, false, name); // Bouton de suppression
         count++;
     }
     for (int i = count; i < 4; i++)
@@ -1031,6 +1143,7 @@ void initRfidButtons()
     bRfidRet = new Button(190, 200, 120, 35, false, "Retour");
 }
 
+// Dessine l'interface de gestion de la base de données RFID (Paginée)
 void drawRfidList()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -1050,12 +1163,12 @@ void drawRfidList()
         int y = 60 + count * 35;
         M5.Lcd.setTextColor(C_WHITE, C_BG);
         M5.Lcd.setTextDatum(ML_DATUM);
-        M5.Lcd.drawString(rfidBadges[i], 10, y + 16);
+        M5.Lcd.drawString(rfidBadges[i], 10, y + 16); // Affiche l'ID RFID
 
         M5.Lcd.fillRoundRect(250, y, 60, 32, 5, C_RED);
         M5.Lcd.setTextColor(C_WHITE, C_RED);
         M5.Lcd.setTextDatum(MC_DATUM);
-        M5.Lcd.drawString("X", 280, y + 16);
+        M5.Lcd.drawString("X", 280, y + 16); // Bouton Supprimer
         count++;
     }
 
@@ -1075,6 +1188,7 @@ void drawRfidList()
     xSemaphoreGive(lcdMutex);
 }
 
+// Logique gérant la pagination et suppression dans la liste RFID
 void handleRfidListLogic()
 {
     for (int i = 0; i < 4; i++)
@@ -1087,11 +1201,12 @@ void handleRfidListLogic()
             {
                 rfidBadges.erase(rfidBadges.begin() + actualIndex);
                 saveRFIDBadges();
+                // Si la page devient vide suite à la suppression, on recule
                 if (rfidPage > 0 && rfidPage * 4 >= (int)rfidBadges.size())
                 {
                     rfidPage--;
                 }
-                setScreen(RFID_LIST); 
+                setScreen(RFID_LIST);
             }
         }
     }
@@ -1120,7 +1235,8 @@ void handleRfidListLogic()
     }
 }
 
-void BlinkLeds(void) //* Faire clignoter la barre LED en jaune lors d'une intrusion
+// Faire clignoter la barre LED en jaune lors d'une alarme / intrusion
+void BlinkLeds(void)
 {
     static unsigned long lastBlink = 0;
     static bool ledState = false;
@@ -1143,7 +1259,8 @@ void BlinkLeds(void) //* Faire clignoter la barre LED en jaune lors d'une intrus
     }
 }
 
-void fadeLeds(void) //* Faire clignoter lentement la barre LED en rouge en mode alarme
+// Animation de "respiration" rouge pour indiquer que l'alarme est armée
+void fadeLeds(void)
 {
     static bool fading = true;
     static int fade = 255;
@@ -1192,6 +1309,7 @@ void initKeypadButtons()
     }
 }
 
+// Dessine le pavé numérique pour la saisie du code PIN
 void drawKeypad()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -1205,7 +1323,7 @@ void drawKeypad()
 
     String displayPin = "";
     for (int i = 0; i < (int)enteredPin.length(); i++)
-        displayPin += "*";
+        displayPin += "*"; // Masque les caractères
     if (displayPin == "")
         displayPin = "Code PIN";
 
@@ -1233,6 +1351,7 @@ void drawKeypad()
     xSemaphoreGive(lcdMutex);
 }
 
+// Met à jour la zone de texte du mot de passe de manière fluide via un Sprite (Anti-scintillement)
 void updateKeypadHeader()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -1256,6 +1375,7 @@ void updateKeypadHeader()
     xSemaphoreGive(lcdMutex);
 }
 
+// Gère les interactions tactiles sur le pavé numérique (Authentification)
 void handleKeypadLogic()
 {
     for (int i = 0; i < 12; i++)
@@ -1275,7 +1395,7 @@ void handleKeypadLogic()
 
             animateBtn(x, y, KP_BTN_W, KP_BTN_H, 5, color);
 
-            if (i == 9)
+            if (i == 9) // Touche "Retour" (Correction ou annulation)
             {
                 if (enteredPin.length() > 0)
                 {
@@ -1287,15 +1407,15 @@ void handleKeypadLogic()
                     setScreen(previousScreenForKeypad);
                 }
             }
-            else if (i == 11)
+            else if (i == 11) // Touche "OK" (Validation)
             {
-                if (enteredPin == keyboardPwd)
+                if (enteredPin == keyboardPwd) // Mot de passe correct
                 {
                     locked = false;
                     enteredPin = "";
                     setScreen(HOME);
                 }
-                else
+                else // Mot de passe incorrect
                 {
                     enteredPin = "";
                     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -1315,7 +1435,7 @@ void handleKeypadLogic()
             }
             else
             {
-                if (enteredPin.length() < 12)
+                if (enteredPin.length() < 12) // Limite de caractères fixée
                 {
                     int digit = (i == 10) ? 0 : (i + 1);
                     enteredPin += String(digit);
@@ -1329,9 +1449,10 @@ void handleKeypadLogic()
 void initAlarmButtons()
 {
     clearButtons();
-    bLock = new Button(0, 0, W, H, false, "UnlockAlarm");
+    bLock = new Button(0, 0, W, H, false, "UnlockAlarm"); // Prends tout l'écran
 }
 
+// Logique pour déverrouiller depuis l'écran "Intrusion"
 void handleAlarmLogic()
 {
     if (bLock && bLock->wasReleased())
@@ -1342,6 +1463,7 @@ void handleAlarmLogic()
     }
 }
 
+// Affiche l'écran d'alerte lors d'une intrusion
 void drawAlarm()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -1365,6 +1487,7 @@ void initPairingButtons()
     bOpts[1] = new Button(C1_X, R2_Y, BTN_W, R2_H, false, "Reappairer");
 }
 
+// Interface pour autoriser la connexion d'un nouveau périphérique à l'alarme
 void drawPairing()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -1396,6 +1519,7 @@ void drawPairing()
     xSemaphoreGive(lcdMutex);
 }
 
+// Met à jour la fenêtre d'appairage en utilisant un Sprite pour éviter le scintillement
 void updatePairingStatus()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -1427,6 +1551,7 @@ void updatePairingStatus()
     xSemaphoreGive(lcdMutex);
 }
 
+// Logique gérant l'appairage depuis l'interface
 void handlePairingLogic()
 {
     if (bOpts[0] && bOpts[0]->wasReleased())
@@ -1439,18 +1564,12 @@ void handlePairingLogic()
     {
         isPairingMode = !isPairingMode;
 
-        /*if (isPairingMode)
-        {
-            // Oublie l'ancienne adresse MAC immédiatement
-            IDdigi = "000000000000";
-            preferences.putString("mac_digi", IDdigi);
-        }*/
-
         animateBtn(C1_X, R2_Y, BTN_W, R2_H, R2_R, isPairingMode ? C_ORANGE : C_BLUE);
         updatePairingStatus();
     }
 }
 
+// Dessine le menu de changement de mot de passe (Même interface que le Keypad)
 void drawChangePwd()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -1463,10 +1582,13 @@ void drawChangePwd()
     M5.Lcd.setTextColor(C_WHITE, C_BLUE);
 
     String displayTitle = "";
-    if (pwdStep == ENTER_OLD) displayTitle = "Ancien PIN";
-    else if (pwdStep == ENTER_NEW) displayTitle = "Nouveau PIN";
-    else if (pwdStep == CONFIRM_NEW) displayTitle = "Confirmer PIN";
-    
+    if (pwdStep == ENTER_OLD)
+        displayTitle = "Ancien PIN";
+    else if (pwdStep == ENTER_NEW)
+        displayTitle = "Nouveau PIN";
+    else if (pwdStep == CONFIRM_NEW)
+        displayTitle = "Confirmer PIN";
+
     String displayPin = "";
     for (int i = 0; i < (int)enteredPin.length(); i++)
         displayPin += "*";
@@ -1497,6 +1619,7 @@ void drawChangePwd()
     xSemaphoreGive(lcdMutex);
 }
 
+// Met à jour la barre de texte lors du processus de changement de MDP
 void updateChangePwdHeader()
 {
     xSemaphoreTake(lcdMutex, portMAX_DELAY);
@@ -1509,9 +1632,12 @@ void updateChangePwdHeader()
     headerSprite.setTextColor(C_WHITE, C_BLUE);
 
     String displayTitle = "";
-    if (pwdStep == ENTER_OLD) displayTitle = "Ancien PIN";
-    else if (pwdStep == ENTER_NEW) displayTitle = "Nouveau PIN";
-    else if (pwdStep == CONFIRM_NEW) displayTitle = "Confirmer PIN";
+    if (pwdStep == ENTER_OLD)
+        displayTitle = "Ancien PIN";
+    else if (pwdStep == ENTER_NEW)
+        displayTitle = "Nouveau PIN";
+    else if (pwdStep == CONFIRM_NEW)
+        displayTitle = "Confirmer PIN";
 
     String displayPin = "";
     for (int i = 0; i < (int)enteredPin.length(); i++)
@@ -1525,6 +1651,7 @@ void updateChangePwdHeader()
     xSemaphoreGive(lcdMutex);
 }
 
+// Logique à 3 étapes pour modifier le code PIN de l'alarme
 void handleChangePwdLogic()
 {
     for (int i = 0; i < 12; i++)
@@ -1537,12 +1664,14 @@ void handleChangePwdLogic()
             int y = KP_START_Y + row * (KP_BTN_H + KP_GAP_Y);
 
             uint16_t color = C_GREY;
-            if (i == 9) color = C_RED;
-            else if (i == 11) color = C_DARKGREEN;
+            if (i == 9)
+                color = C_RED;
+            else if (i == 11)
+                color = C_DARKGREEN;
 
             animateBtn(x, y, KP_BTN_W, KP_BTN_H, 5, color);
 
-            if (i == 9)
+            if (i == 9) // Correction
             {
                 if (enteredPin.length() > 0)
                 {
@@ -1554,11 +1683,11 @@ void handleChangePwdLogic()
                     setScreen(OPTIONS);
                 }
             }
-            else if (i == 11)
+            else if (i == 11) // Validation selon l'étape actuelle
             {
                 if (pwdStep == ENTER_OLD)
                 {
-                    if (enteredPin == keyboardPwd)
+                    if (enteredPin == keyboardPwd) // Ancien validé
                     {
                         pwdStep = ENTER_NEW;
                         enteredPin = "";
@@ -1566,6 +1695,7 @@ void handleChangePwdLogic()
                     }
                     else
                     {
+                        // Affichage erreur
                         enteredPin = "";
                         xSemaphoreTake(lcdMutex, portMAX_DELAY);
                         TFT_eSprite errorSprite = TFT_eSprite(&M5.Lcd);
@@ -1584,7 +1714,7 @@ void handleChangePwdLogic()
                 }
                 else if (pwdStep == ENTER_NEW)
                 {
-                    if (enteredPin.length() >= 4) // Contrainte de 4 caractères minimum (modifiable)
+                    if (enteredPin.length() >= 4) // Contrainte de sécurité minimale
                     {
                         tempNewPwd = enteredPin;
                         pwdStep = CONFIRM_NEW;
@@ -1611,11 +1741,12 @@ void handleChangePwdLogic()
                 }
                 else if (pwdStep == CONFIRM_NEW)
                 {
-                    if (enteredPin == tempNewPwd)
+                    if (enteredPin == tempNewPwd) // Confirmation
                     {
                         keyboardPwd = enteredPin;
-                        preferences.putString("keyboard_pwd", keyboardPwd);
-                        
+                        preferences.putString("keyboard_pwd", keyboardPwd); // Stockage permanent
+
+                        // Affichage validation finale
                         xSemaphoreTake(lcdMutex, portMAX_DELAY);
                         TFT_eSprite succSprite = TFT_eSprite(&M5.Lcd);
                         succSprite.createSprite(W, HEADER_H);
@@ -1628,7 +1759,7 @@ void handleChangePwdLogic()
                         succSprite.deleteSprite();
                         xSemaphoreGive(lcdMutex);
                         vTaskDelay(pdMS_TO_TICKS(1000));
-                        
+
                         setScreen(OPTIONS);
                     }
                     else

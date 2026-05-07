@@ -86,13 +86,6 @@ le VCO, la pll et les mélangeur n'étans pas repertorier sur LTspice sont simul
 | Paramètre | valeur | 
 | ------ | ------ |
 |Tsim | 5ms|
-|F |9600 |
-| | |
-| | |
-| | |
-| | |
-| | |
-| | |
-| | |
-| | |
-| | |
+|F | 9600hz|
+|F13| 13 560 000hz|
+|Fp| 100 000hz|

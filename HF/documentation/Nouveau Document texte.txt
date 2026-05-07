@@ -1,0 +1,60 @@
+SCHEMA ELECTRIQUE : MODULATION/DEMODULATION UART 9600 BPS VIA CD4046BE (100 KHZ)
+
+===============================================================================
+1. EMETTEUR (MODULATEUR FSK)
+===============================================================================
+Le signal UART entre dans le VCO pour varier la fréquence autour de 100 kHz.
+
+BROCHAGE CD4046BE (Emetteur) :
+- Pin 16 (VCC)      : +5V
+- Pin 8  (GND)      : Masse (0V)
+- Pin 5  (Inhibit)  : Masse (0V)
+- Pin 9  (VCO IN)   : Entrée Signal UART (0-5V)
+- Pin 6  (C1A)      : Condensateur 100pF (C1)
+- Pin 7  (C1B)      : Autre patte du condensateur 100pF
+- Pin 11 (R1)       : Résistance 10k ohms (Vers Masse) -> Définit la plage
+- Pin 12 (R2)       : Résistance 47k ohms (Vers Masse) -> Définit l'offset (f_min)
+- Pin 4  (VCO OUT)  : SORTIE DU SIGNAL MODULE (Vers le câble)
+
+Note : Ajoutez une résistance de 470 ohms en série sur la Pin 4 avant d'attaquer 
+le câble pour protéger le circuit.
+
+===============================================================================
+2. RECEPTEUR (DEMODULATEUR PLL)
+===============================================================================
+La PLL se verrouille sur la fréquence entrante et recrée le signal UART.
+
+BROCHAGE CD4046BE (Récepteur) :
+- Pin 16 (VCC)      : +5V
+- Pin 8  (GND)      : Masse (0V)
+- Pin 5  (Inhibit)  : Masse (0V)
+- Pin 14 (SIG IN)   : Entrée du signal venant du câble (via condo 10nF en série)
+- Pin 3  (COMP IN)  : Relier directement à la Pin 4 (VCO OUT)
+- Pin 4  (VCO OUT)  : (Utilisé pour le bouclage interne vers Pin 3)
+- Pin 6, 7 (C1)     : Condensateur 100pF (Même valeur qu'à l'émetteur)
+- Pin 11 (R1)       : Résistance 10k ohms (Même valeur qu'à l'émetteur)
+- Pin 12 (R2)       : Résistance 47k ohms (Même valeur qu'à l'émetteur)
+
+FILTRE DE BOUCLE ET SORTIE DATA :
+- Pin 2  (PC1 OUT)  : Sortie du comparateur de phase.
+                      Relier à une résistance de 10k ohms.
+- Pin 9  (VCO IN)   : L'autre patte de la résistance de 10k ohms arrive ici.
+                      Ajouter un condensateur de 1nF entre la Pin 9 et la Masse.
+                      C'EST ICI QUE SE TROUVE LE SIGNAL UART DEMODULE.
+
+===============================================================================
+3. MISE EN FORME FINALE (CONSEILLE)
+===============================================================================
+Le signal en sortie de la Pin 9 (Récepteur) est analogique. Pour une lecture 
+propre par un UART :
+- Envoyer la Pin 9 vers l'entrée d'une porte Trigger de Schmitt (ex: CD40106).
+- La sortie de la porte sera votre signal UART RX final (0-5V carré).
+
+===============================================================================
+4. CONSEILS DE MONTAGE
+===============================================================================
+- Alimentation : Placez un condensateur de 100nF entre VCC et GND sur chaque puce.
+- Câble : Si le câble est long, utilisez du fil blindé et reliez le blindage à 
+  la masse d'un seul côté.
+- Ajustement : Si le signal ne se verrouille pas, remplacez R2 (émetteur ou 
+  récepteur) par un potentiomètre de 100k pour ajuster la fréquence centrale.

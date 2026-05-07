@@ -4239,10 +4239,6 @@
 		(uuid "55946402-54dc-4721-bbd1-3753c529609f")
 	)
 	(no_connect
-		(at 54.61 184.15)
-		(uuid "6ae1f4b2-dce1-4d4e-82ee-ad0b688df1f5")
-	)
-	(no_connect
 		(at 54.61 176.53)
 		(uuid "85f0fbdb-975d-4d1a-b38e-56600fd91e17")
 	)
@@ -4355,6 +4351,16 @@
 			(type default)
 		)
 		(uuid "18590b7b-e935-4aa3-a323-8a6a7989b22f")
+	)
+	(wire
+		(pts
+			(xy 54.61 184.15) (xy 33.02 184.15)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1862f68a-f96c-440c-8c90-66eaf39f40b6")
 	)
 	(wire
 		(pts
@@ -4695,6 +4701,16 @@
 			(type default)
 		)
 		(uuid "5bb027f0-d5b7-4a9e-bf00-13847b00da0d")
+	)
+	(wire
+		(pts
+			(xy 33.02 184.15) (xy 33.02 185.42)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5ce45ec5-89d9-4471-b188-2545f73726fb")
 	)
 	(wire
 		(pts
@@ -9931,6 +9947,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GND")
+		(at 33.02 185.42 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "accb9728-5540-450b-a729-44625a7cc51d")
+		(property "Reference" "#PWR031"
+			(at 33.02 191.77 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 33.02 190.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 33.02 185.42 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 33.02 185.42 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 33.02 185.42 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "cc6369f7-595e-4dce-9075-36f14c90237e")
+		)
+		(instances
+			(project ""
+				(path "/946d0ff1-e2f0-4b2e-89d7-bc0f32795ea7"
+					(reference "#PWR031")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R")
 		(at 86.36 137.16 90)
 		(unit 1)
@@ -11543,7 +11625,7 @@
 				)
 			)
 		)
-		(property "Value" "10k"
+		(property "Value" "1k"
 			(at 48.26 125.73 90)
 			(effects
 				(font

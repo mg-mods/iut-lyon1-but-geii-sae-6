@@ -59,6 +59,10 @@ bool waitSerial2(String &out, uint32_t timeout);
 void saveValue(String value);
 String readValue(void);
 void pairing(void);
+void DrawOptionMenu(void);
+void PagePairing(void);
+void PageGenerique(String titre, String contenu);
+void PrintDigi(void);
 
 // ====================== SETUP ======================
 
@@ -104,6 +108,8 @@ void setup()
     xTaskCreatePinnedToCore(TaskSound, "SoundTask", 2048, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(TaskInput, "InputTask", 4096, NULL, 3, NULL, 1);
     xTaskCreatePinnedToCore(TaskLed, "LedTask", 4096, NULL, 1, NULL, 0);
+
+    // saveValue("default"); // a commenter pour avoir la memoire persistante de l'appairege
 }
 
 void loop() {}
@@ -112,13 +118,18 @@ void loop() {}
 
 void TaskSynch(void *pvParameters)
 {
-    saveValue("default");   //a commenter pour avoir la memoire persistante de l'appairege
+
+    //saveValue("default"); // a commenter pour avoir la memoire persistante de l'appairege
+
     if (readValue() == "default")
     {
 
         pairing();
     }
     IDhub = readValue();
+
+    Serial.print(IDdigi);
+    Serial.println(IDhub);
 
     int btnX = 0, btnY = 120, btnW = 240, btnH = 60;
     M5.Display.setTextColor(TFT_WHITE);
@@ -187,7 +198,6 @@ void TaskSynch(void *pvParameters)
 
         vTaskDelay(20 / portTICK_PERIOD_MS);
     }
-
     vTaskDelete(NULL);
 }
 
@@ -237,7 +247,7 @@ void TaskInput(void *pvParameters)
                 digitalWrite(RTtoggle, false);
 
                 String resp;
-                const uint32_t mdpTimeout = 2000; // Timeout 2000 ms, même logique que RFID
+                const uint32_t mdpTimeout = 2000; // Timeout 2000 ms, 
 
                 if (!waitSerial2(resp, mdpTimeout)) // <-- timeout appliqué ici
                 {
@@ -321,6 +331,7 @@ void TaskInput(void *pvParameters)
 
                 digitalWrite(RTtoggle, true);
                 Serial2.println("str/" + IDdigi + "/" + IDhub + "/RFIDInput/" + uid);
+                Serial.println("str/" + IDdigi + "/" + IDhub + "/RFIDInput/" + uid);
                 Serial2.flush(); // Attendre que l'envoi soit fini
                 digitalWrite(RTtoggle, false);
 
@@ -376,6 +387,11 @@ void TaskInput(void *pvParameters)
             mfrc522.PICC_HaltA();
             vTaskDelay(1000 / portTICK_PERIOD_MS);
             UpdateDigit("");
+        }
+
+        if (M5.BtnA.isPressed())
+        {
+            DrawOptionMenu();
         }
 
         vTaskDelay(20 / portTICK_PERIOD_MS);
@@ -636,7 +652,8 @@ void pairing(void)
         if (xSemaphoreTake(xSerialMutex, pdMS_TO_TICKS(50)) == pdTRUE)
         {
             digitalWrite(RTtoggle, true);
-            Serial2.println("str/" + IDdigi + "/" + IDhub + "/pairing/0");
+            Serial2.println("str/" + IDdigi + "/" + "000000000000" + "/pairing/0");
+            Serial.println("str/" + IDdigi + "/" + "000000000000" + "/pairing/0");
             digitalWrite(RTtoggle, false);
             xSemaphoreGive(xSerialMutex);
         }
@@ -664,12 +681,156 @@ void pairing(void)
                 }
             }
         }
-
-// Compatible FreeRTOS OU loop classique
-#ifdef ARDUINO_ARCH_ESP32
-        vTaskDelay(pdMS_TO_TICKS(50));
-#else
-        delay(50);
-#endif
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
+}
+
+// ====================== MENU OPTIONS ======================
+
+void DrawOptionMenu(void)
+{
+    const int W = 240;
+    const int HEADER_H = 40;
+    const int OPTION_COUNT = 6;
+    const int O_W = 90;
+    const int O_H = 60;
+    const int O_R = 10;
+
+    int optX[OPTION_COUNT] = {20, 130, 20, 130, 20, 130};
+    int optY[OPTION_COUNT] = {60, 60, 140, 140, 220, 220};
+
+    String optLabels[OPTION_COUNT] = {
+        "Pairing", "Opt2",
+        "Opt3", "Opt4",
+        "Opt5", "Exit"};
+
+    // Lambda de dessin du menu (réutilisé après retour d'une sous-page)
+    auto DrawMenu = [&]()
+    {
+        M5.Lcd.fillScreen(TFT_BLACK);
+        M5.Lcd.fillRect(0, 0, W, HEADER_H, TFT_BLUE);
+        M5.Lcd.setTextDatum(MC_DATUM);
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLUE);
+        M5.Lcd.setTextSize(1);
+        M5.Lcd.drawString("Options", W / 2, HEADER_H / 2);
+        M5.Lcd.setTextSize(2);
+        for (int i = 0; i < OPTION_COUNT; i++)
+        {
+            uint16_t c = (i == 5) ? TFT_DARKGREY : TFT_BLUE;
+            M5.Lcd.fillRoundRect(optX[i], optY[i], O_W, O_H, O_R, c);
+            M5.Lcd.setTextColor(TFT_WHITE, c);
+            M5.Lcd.drawString(optLabels[i], optX[i] + O_W / 2, optY[i] + O_H / 2);
+        }
+    };
+
+    DrawMenu();
+
+    bool running = true;
+    while (running)
+    {
+        M5.update();
+        auto t = M5.Touch.getDetail();
+
+        if (t.wasPressed())
+        {
+            int tx = t.x, ty = t.y;
+            for (int i = 0; i < OPTION_COUNT; i++)
+            {
+                if (tx >= optX[i] && tx <= optX[i] + O_W &&
+                    ty >= optY[i] && ty <= optY[i] + O_H)
+                {
+                    switch (i)
+                    {
+                    case 0:
+                        PagePairing();
+                        break;
+                    case 1:
+                        PageGenerique("Opt2", "Page Opt2");
+                        break;
+                    case 2:
+                        PageGenerique("Opt3", "Page Opt3");
+                        break;
+                    case 3:
+                        PageGenerique("Opt4", "Page Opt4");
+                        break;
+                    case 4:
+                        PageGenerique("Opt5", "Page Opt5");
+                        break;
+                    case 5:
+                        running = false;
+                        break;
+                    }
+                    if (running)
+                        DrawMenu(); // Redessine le menu au retour d'une sous-page
+                    delay(200);
+                    break;
+                }
+            }
+        }
+        delay(5);
+    }
+
+    PrintDigi();
+}
+
+// ====================== SOUS-PAGES DU MENU ======================
+
+void PagePairing(void)
+{
+    M5.Lcd.fillScreen(TFT_BLACK);
+    M5.Lcd.fillRect(0, 0, 240, 40, TFT_BLUE);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLUE);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.drawString("Pairing", 120, 20);
+
+    // Bouton retour
+    M5.Lcd.fillRoundRect(75, 260, 90, 40, 10, TFT_DARKGREY);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_DARKGREY);
+    M5.Lcd.drawString("Retour", 120, 280);
+
+    pairing(); 
+    PrintDigi();
+}
+
+void PageGenerique(String titre, String contenu)
+{
+    M5.Lcd.fillScreen(TFT_BLACK);
+    M5.Lcd.fillRect(0, 0, 240, 40, TFT_BLUE);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLUE);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.drawString(titre, 120, 20);
+
+    // Contenu
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.drawString(contenu, 120, 150);
+
+    // Bouton retour
+    M5.Lcd.fillRoundRect(75, 260, 90, 40, 10, TFT_DARKGREY);
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_DARKGREY);
+    M5.Lcd.drawString("Retour", 120, 280);
+
+    while (true)
+    {
+        M5.update();
+        if (M5.Touch.getCount() > 0)
+        {
+            auto p = M5.Touch.getDetail(0);
+            if (p.wasPressed() && p.x >= 75 && p.x <= 165 && p.y >= 260 && p.y <= 300)
+                return;
+        }
+        delay(10);
+    }
+}
+void PrintDigi(void)
+{
+    // ===== RETOUR AU DIGICODE =====
+    M5.Lcd.fillScreen(TFT_DARKGREY);
+    M5.Lcd.setTextDatum(TL_DATUM);
+    DrawButtons();
+    drawAllDigitNeon();
+    UpdateDigit("");
 }

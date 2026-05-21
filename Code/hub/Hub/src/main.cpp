@@ -433,6 +433,10 @@ void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
     {
         locked = !locked; // Alterne l'état de l'alarme
         setScreen(HOME);
+
+        t_message_lcd message;
+        snprintf(message.msg, TRAME_SIZE, "%s has badged", rfid);
+        xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
     }
 }
 
@@ -464,6 +468,9 @@ void handleChangePwdKeyboard(char *buffer)
         preferences.putString("keyboard_pwd", keyboardPwd);
         logSerial("Mot de passe change");
         Serial2.println("str/" + IDhub + "/" + IDdigi + "/NewPass/true");
+        t_message_lcd message;
+        snprintf(message.msg, TRAME_SIZE, "KeyBoard pwd changed");
+        xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
     }
     else
     {
@@ -478,22 +485,33 @@ void handleAddRFID(char *buffer)
 
     // Vérification si le badge est déjà enregistré
     bool alreadyExists = false;
-    for (const String &b : rfidBadges) {
-        if (b == rfidStr) {
+    for (const String &b : rfidBadges)
+    {
+        if (b == rfidStr)
+        {
             alreadyExists = true;
             break;
         }
     }
 
-    if (!alreadyExists) {
+    if (!alreadyExists)
+    {
         rfidBadges.push_back(rfidStr);
         saveRFIDBadges(); // Sauvegarde persistante en mémoire Flash
         logSerial("Badge RFID ajoute : %s", rfid);
         Serial2.println("str/" + IDhub + "/" + IDdigi + "/AddRFID/true");
-    } else {
-        logSerial("Badge RFID deja present : %s", rfid);
-        Serial2.println("str/" + IDhub + "/" + IDdigi + "/AddRFID/false");
+        t_message_lcd message;
+        snprintf(message.msg, TRAME_SIZE, "RFID Added");
+        xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
     }
+    else if (alreadyExists == true)
+    {
+        logSerial("Badge RFID deja present : %s", rfid);
+        Serial2.println("str/" + IDhub + "/" + IDdigi + "/AddRFID/already");
+    }
+    else
+        logSerial("Format RFID non valide : %s", rfid);
+    Serial2.println("str/" + IDhub + "/" + IDdigi + "/AddRFID/false");
 }
 
 // Renvoie la longueur du MDP(int) sur demande du périphérique distant
@@ -568,11 +586,11 @@ void taskTraiteTrame(void *pvParameters)
     // Expressions régulières pour analyser les requêtes reçues du périphérique distant
     static const std::regex re_ask_len("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskLenghtMDP/0");
     static const std::regex re_change_pwd("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/NewPass/[0-9]{1,9}");
-    static const std::regex re_add_rfid("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AddRFID/[ ,a-z,A-Z,0-9]{12,17}");
-    static const std::regex re_del_rfid("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/DelRFID/[ ,a-z,A-Z,0-9]{12,17}");
+    static const std::regex re_add_rfid("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AddRFID/[ ,a-z,A-Z,0-9]{12,25}");
+    static const std::regex re_del_rfid("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/DelRFID/[ ,a-z,A-Z,0-9]{12,25}");
     static const std::regex re_ask_state_alarm("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/AskStateAlarm/0");
     static const std::regex re_mdp_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/MDPInput/[0-9]{1,9}");
-    static const std::regex re_rfid_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/RFIDInput/[ ,a-z,A-Z,0-9]{12,17}");
+    static const std::regex re_rfid_input("str/[ ,a-z,A-Z,0-9,:]{17}/[ ,a-z,A-Z,0-9,:]{17}/RFIDInput/[ ,a-z,A-Z,0-9]{12,25}");
     static const std::regex re_pairing("str/[ ,a-z,A-Z,0-9,:]{17}/000000000000/pairing/0");
 
     while (1)
@@ -585,6 +603,7 @@ void taskTraiteTrame(void *pvParameters)
 
                 if (i > 0)
                 {
+                    logSerial(buffer);                   // Decommenter pour afficher toutes les réceptions
                     if (checkMACisInROM(buffer) == true) // Protège contre les digicodes non appairés
                     {
                         if (strcmp(buffer, "E") == 0)
@@ -620,7 +639,7 @@ void taskTraiteTrame(void *pvParameters)
                             if (isPairingMode)
                                 handlePairing(buffer);
                             else
-                                logSerial("Appairage refuse: inactif");
+                                logSerial("Appairage refuse: pas en mode appairage");
                         }
                     }
                     else if (std::regex_match(std::string(buffer), re_pairing)) // Digicode inconnu demandant un appairage
@@ -628,7 +647,7 @@ void taskTraiteTrame(void *pvParameters)
                         if (isPairingMode)
                             handlePairing(buffer);
                         else
-                            logSerial("Appairage refuse: inactif");
+                            logSerial("Appairage refuse: pas en mode appairage");
                     }
                     else
                     {
@@ -760,6 +779,7 @@ void setup()
 
     // Chargement de la configuration depuis la mémoire persistante (NVS)
     preferences.begin("preferences", false);
+    // preferences.putString("keyboard_pwd", "1111"); //?Decommenter pour reset le mdp
     keyboardPwd = preferences.getString("keyboard_pwd", "1111");
     loadRFIDBadges();
 
@@ -1207,6 +1227,7 @@ void handleRfidListLogic()
                     rfidPage--;
                 }
                 setScreen(RFID_LIST);
+                return;
             }
         }
     }
@@ -1217,6 +1238,7 @@ void handleRfidListLogic()
             animateBtn(10, 200, 80, 35, 5, C_BLUE);
             rfidPage--;
             setScreen(RFID_LIST);
+            return;
         }
     }
     if (bRfidNext && bRfidNext->wasReleased())
@@ -1226,12 +1248,14 @@ void handleRfidListLogic()
             animateBtn(100, 200, 80, 35, 5, C_BLUE);
             rfidPage++;
             setScreen(RFID_LIST);
+            return;
         }
     }
     if (bRfidRet && bRfidRet->wasReleased())
     {
         animateBtn(190, 200, 120, 35, 5, C_GREY);
         setScreen(OPTIONS);
+        return;
     }
 }
 

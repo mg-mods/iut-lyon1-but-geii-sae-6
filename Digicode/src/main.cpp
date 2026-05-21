@@ -321,9 +321,9 @@ void TaskInput(void *pvParameters)
                     Serial2.read();
 
                 digitalWrite(RTtoggle, true);
-                Serial2.println("str/" + IDdigi + "/" + IDhub + "/PassAdminInput/" + uid);
+                Serial2.println("str/" + IDdigi + "/" + IDhub + "/RFIDInput/" + uid);
 #if DEBUG
-                Serial.println("str/" + IDdigi + "/" + IDhub + "/PassAdminInput/" + uid);
+                Serial.println("str/" + IDdigi + "/" + IDhub + "/RFIDInput/" + uid);
 #endif
                 Serial2.flush(); // Attendre que l'envoi soit fini
                 digitalWrite(RTtoggle, false);
@@ -343,7 +343,7 @@ void TaskInput(void *pvParameters)
                 }
                 else
                 {
-                    String FormatStateRFID = "str/" + String(IDhub) + "/" + String(IDdigi) + "/StatePassAdmin/";
+                    String FormatStateRFID = "str/" + String(IDhub) + "/" + String(IDdigi) + "/StateRFID/";
 #if DEBUG
                     Serial.println("resp rfid: " + resp);
 #endif
@@ -352,7 +352,7 @@ void TaskInput(void *pvParameters)
                         ev = EVENT_GOOD;
                         xQueueSend(queueSound, &ev, 0);
                         xSemaphoreGive(xSerialMutex);
-                        historique.push_back("menu admin open");
+                        historique.push_back("demande RFID: " + uid + " -> correct and authorized (cam off)");
                     }
                     else
                     {
@@ -399,9 +399,9 @@ void TaskInput(void *pvParameters)
                     Serial2.read();
 
                 digitalWrite(RTtoggle, true);
-                Serial2.println("str/" + IDdigi + "/" + IDhub + "/PassAdmin/" + InputPassAdmin);
+                Serial2.println("str/" + IDdigi + "/" + IDhub + "/PassAdminInput/" + InputPassAdmin);
 #if DEBUG
-                Serial.println("str/" + IDdigi + "/" + IDhub + "/PassAdmin/" + InputPassAdmin);
+                Serial.println("str/" + IDdigi + "/" + IDhub + "/PassAdminInput/" + InputPassAdmin);
 #endif
                 Serial2.flush();
                 digitalWrite(RTtoggle, false);
@@ -416,8 +416,8 @@ void TaskInput(void *pvParameters)
                     xQueueSend(queueSound, &ev, 0);
                     historique.push_back("PassAdmin: " + InputPassAdmin + " -> timeout");
                     xSemaphoreGive(xSerialMutex);
-                    // PrintDigi();
-                    DrawOptionMenu();
+                    PrintDigi();
+                    
                 }
                 else
                 {
@@ -430,7 +430,7 @@ void TaskInput(void *pvParameters)
                     {
                         ev = EVENT_GOOD;
                         xQueueSend(queueSound, &ev, 0);
-                        historique.push_back("PassAdmin: " + InputPassAdmin + " -> correct + autorise");
+                        historique.push_back("PassAdmin: " + InputPassAdmin + " ->  correct");
                         xSemaphoreGive(xSerialMutex);
                         GoodPass("OK", 15, 15);
                         DrawOptionMenu();
@@ -441,8 +441,8 @@ void TaskInput(void *pvParameters)
                         xQueueSend(queueSound, &ev, 0);
                         historique.push_back("PassAdmin: " + InputPassAdmin + " -> incorrect");
                         xSemaphoreGive(xSerialMutex);
-                        // PrintDigi();
-                        DrawOptionMenu();
+                        PrintDigi();
+                        
                     }
                 }
             }

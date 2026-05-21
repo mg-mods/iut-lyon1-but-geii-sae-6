@@ -1,3 +1,14 @@
+/**
+ * @file    main.cpp
+ * @brief   Digicode M5Stack avec authentification MDP, RFID et admin.
+ *
+ * Gère l'affichage tactile, la lecture RFID via MFRC522, la communication
+ * série avec un hub distant et un historique horodaté des événements.
+ *
+ * @author  Vogitek
+ * @version 1.0
+ */
+
 #include <M5Unified.h>
 #include <driver/dac.h>
 #include <SPI.h>
@@ -5,40 +16,62 @@
 #include "Vogitek_Logo.h"
 #include <Preferences.h>
 
-#define DEBUG 0 // mettre 0 pour désactiver
+/** @defgroup config Configuration générale
+ *  @{
+ */
+#define DEBUG 0          ///< Activer (1) ou désactiver (0) les logs série
 
-#define RST_PIN 33
-#define SS_PIN 27
+/** @} */
 
-#define Led_Red 26
-#define Led_Green 25
+/** @defgroup pins Broches matérielles
+ *  @{
+ */
+#define RST_PIN 33       ///< Broche reset du lecteur RFID MFRC522
+#define SS_PIN 27        ///< Broche chip select du lecteur RFID MFRC522
 
-#define RTtoggle 32
+/** @} */
 
-#define Tx 14
-#define Rx 13
+/** @defgroup leds LEDs de statut
+ *  @{
+ */
+#define Led_Red 26       ///< Broche LED rouge (alarme active)
+#define Led_Green 25     ///< Broche LED verte (alarme inactive)
+
+/** @} */
+
+/** @defgroup serial Communication série RS485
+ *  @{
+ */
+#define RTtoggle 32      ///< Broche contrôle direction RS485 (TX/RX)
+
+#define Tx 14            ///< Broche TX du port série 2
+#define Rx 13            ///< Broche RX du port série 2
+/** @} */
 
 // ====================== VARIABLES ======================
 
-String IDdigi = "000000000000";
-String IDhub = "000000000000";
+String IDdigi  ///< Identifiant MAC du digicode (auto-détecté au démarrage) = "000000000000";
+String IDhub = "000000000000";  ///< Identifiant MAC du hub associé (chargé depuis la mémoire flash)
 
-Preferences preferences;
+Preferences preferences;  ///< Accès à la mémoire NVS pour la persistance de IDhub
 
-SemaphoreHandle_t xSerialMutex;
-MFRC522 mfrc522(SS_PIN, RST_PIN);
+SemaphoreHandle_t xSerialMutex;  ///< Mutex FreeRTOS protégeant l'accès au port série 2
+MFRC522 mfrc522(SS_PIN, RST_PIN);  ///< Instance du lecteur RFID MFRC522
 
-std::vector<String> historique;
+std::vector<String> historique;  ///< Journal horodaté des événements (MDP, RFID, admin)
 
 // ====================== FREERTOS ======================
 
+/**
+ * @brief Types d'événements audio envoyés à la tâche son.
+ */
 enum EventType
 {
-    EVENT_GOOD,
-    EVENT_WRONG
+    EVENT_GOOD,   ///< Authentification réussie → son de confirmation
+    EVENT_WRONG   ///< Authentification échouée → son d'erreur
 };
 
-QueueHandle_t queueSound;
+QueueHandle_t queueSound;  ///< File FreeRTOS d'événements vers TaskSound
 
 // ====================== PROTOTYPES ======================
 
@@ -76,6 +109,12 @@ String getFormattedTime(void);
 
 // ====================== SETUP ======================
 
+/**
+ * @brief Initialisation du système.
+ *
+ * Configure le matériel (LCD, SPI, RFID, GPIO), charge l'ID du hub
+ * depuis la NVS, lance le pairing si nécessaire, puis crée les tâches FreeRTOS.
+ */
 void setup()
 {
     M5.begin();
@@ -121,10 +160,23 @@ void setup()
     xTaskCreatePinnedToCore(TaskInput, "InputTask", 4096, NULL, 3, NULL, 1);
     xTaskCreatePinnedToCore(TaskLed, "LedTask", 4096, NULL, 1, NULL, 0);
 }
+/**
+ * @brief Boucle principale Arduino — non utilisée (tout est géré par FreeRTOS).
+ */
 void loop() {}
 
 // ====================== TASK INPUT ======================
 
+/**
+ * @brief Tâche FreeRTOS principale : gestion du clavier tactile, RFID et bouton admin.
+ *
+ * - Lit les appuis tactiles et envoie le MDP saisi au hub via Serial2.
+ * - Lit les badges RFID et envoie l'UID au hub.
+ * - Gère le bouton physique BtnA pour le mode admin.
+ * - Détecte la séquence secrète de reset usine : 7 5 1 DEL 3 9 DEL 3.
+ *
+ * @param pvParameters Paramètre FreeRTOS non utilisé.
+ */
 void TaskInput(void *pvParameters)
 {
     String InputUser = "";
@@ -457,6 +509,16 @@ void TaskInput(void *pvParameters)
 }
 // ====================== TASK LED ======================
 
+/**
+ * @brief Tâche FreeRTOS de gestion des LEDs de statut.
+ *
+ * Interroge le hub toutes les 2 secondes via Serial2 pour connaître l'état de l'alarme.
+ * - Alarme active  : LED rouge allumée, LED verte éteinte.
+ * - Alarme inactive: LED verte allumée, LED rouge éteinte.
+ * - Hub injoignable: les deux LEDs allumées.
+ *
+ * @param pvParameters Paramètre FreeRTOS non utilisé.
+ */
 void TaskLed(void *pvParameters)
 {
     String resp = "";
@@ -498,6 +560,14 @@ void TaskLed(void *pvParameters)
 
 // ====================== TASK SOUND ======================
 
+/**
+ * @brief Tâche FreeRTOS de gestion des sons.
+ *
+ * Attend des événements dans la file @ref queueSound et joue
+ * le son correspondant (confirmation ou erreur).
+ *
+ * @param pvParameters Paramètre FreeRTOS non utilisé.
+ */
 void TaskSound(void *pvParameters)
 {
     EventType event;
@@ -514,6 +584,16 @@ void TaskSound(void *pvParameters)
 }
 
 // ====================== UI + EFFECTS ======================
+/**
+ * @brief Gère l'appui sur un bouton du clavier : animation + ajout du chiffre.
+ *
+ * @param x1        Position X du bouton.
+ * @param y1        Position Y du bouton.
+ * @param x2        Largeur du bouton.
+ * @param y2        Hauteur du bouton.
+ * @param digit     Chiffre associé au bouton.
+ * @param InputUser Chaîne de saisie courante (modifiée par référence, max 7 caractères).
+ */
 void PressButton(int x1, int y1, int x2, int y2, String digit, String &InputUser)
 {
     DrawButtonPressed(x1, y1, x2, y2);
@@ -527,6 +607,13 @@ void PressButton(int x1, int y1, int x2, int y2, String digit, String &InputUser
     }
 }
 
+/**
+ * @brief Affiche le texte de validation en vert dans la zone de saisie.
+ *
+ * @param text Texte à afficher (ex. code saisi ou "OK").
+ * @param x    Position X du curseur.
+ * @param y    Position Y du curseur.
+ */
 void GoodPass(String text, int x, int y)
 {
     M5.Lcd.fillRect(0, 0, 260, 60, TFT_DARKGREY);
@@ -536,6 +623,14 @@ void GoodPass(String text, int x, int y)
     M5.Lcd.print(text);
 }
 
+/**
+ * @brief Affiche le texte d'erreur avec une animation de secousse horizontale.
+ *
+ * @param text       Texte à afficher.
+ * @param x          Position X de base.
+ * @param y          Position Y de base.
+ * @param policeSize Taille de police (défaut : 5).
+ */
 void ShakeWrongPass(String text, int x, int y, int policeSize)
 {
     int amplitude = 15;
@@ -551,6 +646,9 @@ void ShakeWrongPass(String text, int x, int y, int policeSize)
     }
 }
 
+/**
+ * @brief Joue une mélodie ascendante signalant une authentification réussie.
+ */
 void GoodSound(void)
 {
     M5.Speaker.tone(1000, 150);
@@ -560,6 +658,9 @@ void GoodSound(void)
     M5.Speaker.tone(1400, 200);
 }
 
+/**
+ * @brief Joue une mélodie descendante signalant une authentification échouée.
+ */
 void WrongSound(void)
 {
     M5.Speaker.tone(1400, 150);
@@ -569,6 +670,14 @@ void WrongSound(void)
     M5.Speaker.tone(1000, 200);
 }
 
+/**
+ * @brief Dessine un bouton dans son état pressé (fond bleu marine).
+ *
+ * @param x1 Position X.
+ * @param y1 Position Y.
+ * @param x2 Largeur.
+ * @param y2 Hauteur.
+ */
 void DrawButtonPressed(int x1, int y1, int x2, int y2)
 {
     M5.Lcd.fillRect(x1, y1, x2, y2, TFT_NAVY);
@@ -576,6 +685,14 @@ void DrawButtonPressed(int x1, int y1, int x2, int y2)
     M5.Lcd.drawRect(x1 + 1, y1 + 1, x2 - 2, y2 - 2, TFT_BLACK);
 }
 
+/**
+ * @brief Dessine un bouton dans son état normal (fond bleu).
+ *
+ * @param x1 Position X.
+ * @param y1 Position Y.
+ * @param x2 Largeur.
+ * @param y2 Hauteur.
+ */
 void DrawButton(int x1, int y1, int x2, int y2)
 {
     M5.Lcd.fillRect(x1, y1, x2, y2, TFT_BLUE);
@@ -583,6 +700,16 @@ void DrawButton(int x1, int y1, int x2, int y2)
     M5.Lcd.drawRect(x1 + 1, y1 + 1, x2 - 2, y2 - 2, TFT_NAVY);
 }
 
+/**
+ * @brief Dessine un bouton avec une couleur personnalisée.
+ *
+ * @param x1        Position X.
+ * @param y1        Position Y.
+ * @param x2        Largeur.
+ * @param y2        Hauteur.
+ * @param color     Couleur de remplissage principale.
+ * @param colorDark Couleur de la bordure interne (effet relief).
+ */
 void DrawButtonColor(int x1, int y1, int x2, int y2, uint16_t color, uint16_t colorDark)
 {
     M5.Lcd.fillRect(x1, y1, x2, y2, color);
@@ -590,6 +717,11 @@ void DrawButtonColor(int x1, int y1, int x2, int y2, uint16_t color, uint16_t co
     M5.Lcd.drawRect(x1 + 1, y1 + 1, x2 - 2, y2 - 2, colorDark);
 }
 
+/**
+ * @brief Dessine l'ensemble du clavier numérique (12 boutons).
+ *
+ * Le bouton OK est en vert et le bouton DEL en rouge.
+ */
 void DrawButtons(void)
 {
     int coords[48] = {
@@ -651,6 +783,13 @@ void DrawButtons(void)
     DrawButtonColor(163, 264, 70, 52, TFT_RED, TFT_MAROON);
 }
 
+/**
+ * @brief Dessine un chiffre avec un effet néon (halo cyan + texte blanc).
+ *
+ * @param x   Coordonnée Y logique (transformée en coordonnée écran).
+ * @param y1  Coordonnée X logique.
+ * @param num Chiffre à afficher.
+ */
 void drawDigitNeon(int x, int y1, int num)
 {
     M5.Lcd.setTextSize(3);
@@ -664,6 +803,9 @@ void drawDigitNeon(int x, int y1, int num)
     M5.Lcd.print(num);
 }
 
+/**
+ * @brief Dessine tous les labels du clavier (0-9, OK, Del) avec l'effet néon.
+ */
 void drawAllDigitNeon(void)
 {
     drawDigitNeon(196, 34, 7);
@@ -683,6 +825,13 @@ void drawAllDigitNeon(void)
     drawDigitNeonStr(16, 175, "Del");
 }
 
+/**
+ * @brief Dessine une chaîne de caractères avec l'effet néon (halo cyan + texte blanc).
+ *
+ * @param x   Coordonnée Y logique.
+ * @param y1  Coordonnée X logique.
+ * @param sym Chaîne à afficher (ex. "OK", "Del").
+ */
 void drawDigitNeonStr(int x, int y1, String sym)
 {
     M5.Lcd.setTextSize(3);
@@ -696,6 +845,11 @@ void drawDigitNeonStr(int x, int y1, String sym)
     M5.Lcd.print(sym);
 }
 
+/**
+ * @brief Efface la zone de saisie et affiche le texte courant.
+ *
+ * @param text Texte à afficher dans la zone de saisie (en haut de l'écran).
+ */
 void UpdateDigit(String text)
 {
     M5.Lcd.fillRect(0, 0, 260, 60, TFT_DARKGREY);
@@ -706,6 +860,11 @@ void UpdateDigit(String text)
     M5.Lcd.setTextSize(3);
 }
 
+/**
+ * @brief Retourne l'adresse MAC Wi-Fi de l'ESP32 au format XX:XX:XX:XX:XX:XX.
+ *
+ * @return String Adresse MAC en majuscules.
+ */
 String getMacFactory(void)
 {
     uint8_t mac[6];
@@ -719,6 +878,14 @@ String getMacFactory(void)
     return String(macStr);
 }
 
+/**
+ * @brief Attend une ligne complète sur Serial2 avec un timeout.
+ *
+ * @param out     Chaîne de sortie contenant la réponse reçue (sans \n, trimmée).
+ * @param timeout Durée maximale d'attente en millisecondes (défaut : 2000 ms).
+ * @return true   Une réponse a été reçue dans le délai imparti.
+ * @return false  Timeout expiré sans réponse.
+ */
 bool waitSerial2(String &out, uint32_t timeout = 2000)
 {
     unsigned long start = millis();
@@ -738,6 +905,11 @@ bool waitSerial2(String &out, uint32_t timeout = 2000)
     return false;
 }
 
+/**
+ * @brief Lit l'ID du hub stocké en mémoire NVS.
+ *
+ * @return String Valeur stockée, ou "default" si aucune valeur n'existe.
+ */
 String readValue(void)
 {
     preferences.begin("config", true); // read-only
@@ -746,6 +918,11 @@ String readValue(void)
     return value;
 }
 
+/**
+ * @brief Enregistre l'ID du hub en mémoire NVS (persistante).
+ *
+ * @param value Identifiant du hub à sauvegarder.
+ */
 void saveValue(String value)
 {
     preferences.begin("config", false); // namespace
@@ -753,6 +930,17 @@ void saveValue(String value)
     preferences.end();
 }
 
+/**
+ * @brief Lance la procédure d'appairage avec un hub.
+ *
+ * Envoie une trame de pairing toutes les 2 secondes et attend la réponse du hub.
+ * Affiche une animation "Connexion..." pendant l'attente.
+ *
+ * @param cancellable true si l'utilisateur peut annuler (depuis le menu),
+ *                    false si le pairing est obligatoire (premier démarrage).
+ * @return true  Appairage réussi.
+ * @return false Appairage annulé par l'utilisateur.
+ */
 bool pairing(bool cancellable)
 {
     unsigned long lastAnim = 0;
@@ -855,6 +1043,13 @@ bool pairing(bool cancellable)
 }
 // ====================== MENU OPTIONS ======================
 
+/**
+ * @brief Affiche et gère le menu principal des options admin.
+ *
+ * Options disponibles : Pairing, Infos système, Test RFID,
+ * Historique, Modification des accès, Quitter.
+ * Retourne au digicode classique à la sortie.
+ */
 void DrawOptionMenu(void)
 {
     const int W = 240;
@@ -959,6 +1154,11 @@ void DrawOptionMenu(void)
 
 // ====================== SOUS-PAGES DU MENU ======================
 
+/**
+ * @brief Page de sous-menu permettant de lancer un appairage depuis le menu admin.
+ *
+ * Affiche l'ID du hub actuel et un bouton pour lancer la procédure d'appairage.
+ */
 void PagePairing(void)
 {
     auto DrawPage = [&]()
@@ -1013,6 +1213,12 @@ void PagePairing(void)
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
+/**
+ * @brief Affiche une page générique avec un titre, un contenu centré et un bouton retour.
+ *
+ * @param titre   Titre affiché dans l'en-tête bleu.
+ * @param contenu Texte affiché au centre de la page.
+ */
 void PageGenerique(String titre, String contenu)
 {
     M5.Lcd.fillScreen(TFT_BLACK);
@@ -1046,6 +1252,12 @@ void PageGenerique(String titre, String contenu)
     }
 }
 
+/**
+ * @brief Affiche les informations système de l'ESP32.
+ *
+ * Informations affichées : ID Digi, ID Hub, heap libre, heap minimum,
+ * fréquence CPU, taille flash, version SDK.
+ */
 void PageInfosSysteme()
 {
     M5.Lcd.fillScreen(TFT_BLACK);
@@ -1102,6 +1314,12 @@ void PageInfosSysteme()
     }
 }
 
+/**
+ * @brief Page de test RFID : affiche l'UID, la taille et le type du badge détecté.
+ *
+ * Permet de vérifier le bon fonctionnement du lecteur MFRC522
+ * sans envoyer de trame au hub.
+ */
 void PageTestRFID()
 {
     M5.Lcd.fillScreen(TFT_BLACK);
@@ -1211,6 +1429,13 @@ void PageTestRFID()
     }
 }
 
+/**
+ * @brief Affiche l'historique des événements avec scroll et bouton de vidage.
+ *
+ * Les entrées sont affichées du plus récent au plus ancien.
+ * Le timestamp est affiché en cyan, le reste en blanc.
+ * Boutons : scroll haut/bas, vider l'historique, retour au menu.
+ */
 void PageHistorique()
 {
     manageHistorique();
@@ -1296,6 +1521,12 @@ void PageHistorique()
     }
 }
 
+/**
+ * @brief Page de modification des accès : changement de MDP et ajout de badge RFID.
+ *
+ * - Bouton "Changer MDP" : saisie du nouveau mot de passe et envoi au hub.
+ * - Bouton "Ajouter Badge" : scan d'un badge RFID et envoi au hub pour enregistrement.
+ */
 void PageChangeCredentials()
 {
 
@@ -1506,6 +1737,11 @@ void PageChangeCredentials()
     }
 }
 
+/**
+ * @brief Réaffiche l'écran du digicode principal (fond gris + clavier + labels néon).
+ *
+ * Appelé après chaque retour depuis un menu ou une authentification.
+ */
 void PrintDigi(void)
 {
     // ===== RETOUR AU DIGICODE =====
@@ -1516,6 +1752,14 @@ void PrintDigi(void)
     UpdateDigit("");
 }
 
+/**
+ * @brief Clavier de saisie en mode admin (fond rouge).
+ *
+ * Affiche le clavier sur fond rouge pour distinguer visuellement
+ * le mode d'authentification admin. Retourne la saisie à la validation (OK).
+ *
+ * @return String Code saisi par l'utilisateur.
+ */
 String InputUserRedMode()
 {
 
@@ -1585,12 +1829,25 @@ String InputUserRedMode()
         }
     }
 }
+/**
+ * @brief Supprime les entrées les plus anciennes si l'historique dépasse la limite.
+ *
+ * Garde au maximum les 5 dernières entrées.
+ */
 void manageHistorique(void)
 {
     while (historique.size() > 5)
         historique.erase(historique.begin());
 }
 
+/**
+ * @brief Retourne l'heure courante formatée pour l'historique.
+ *
+ * Utilise le RTC du M5Stack pour obtenir la date et l'heure.
+ * Format de sortie : [JJ/MM HH:MM:SS]
+ *
+ * @return String Horodatage entre crochets suivi d'un espace.
+ */
 String getFormattedTime(void) {
     auto dt = M5.Rtc.getDateTime();
     char timeStr[20];

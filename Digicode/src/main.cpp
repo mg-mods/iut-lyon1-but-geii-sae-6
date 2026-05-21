@@ -5,7 +5,7 @@
 #include "Vogitek_Logo.h"
 #include <Preferences.h>
 
-#define DEBUG 1 // mettre 0 pour désactiver
+#define DEBUG 0 // mettre 0 pour désactiver
 
 #define RST_PIN 33
 #define SS_PIN 27
@@ -72,6 +72,7 @@ void drawDigitNeonStr(int x, int y1, String sym);
 void PageChangeCredentials(void);
 String InputUserRedMode(void);
 void manageHistorique(void);
+String getFormattedTime(void);
 
 // ====================== SETUP ======================
 
@@ -216,7 +217,7 @@ void TaskInput(void *pvParameters)
                                 M5.Lcd.setTextColor(TFT_BLACK);
                                 M5.Lcd.setTextSize(2.5);
                                 M5.Display.print("Time out 2000ms"); // affichage timeout
-                                historique.push_back("demande mdp: " + InputUser + " -> timeout");
+                                historique.push_back(getFormattedTime() + "demande mdp: " + InputUser + " -> timeout");
                                 xSemaphoreGive(xSerialMutex);
                             }
                             else
@@ -232,7 +233,7 @@ void TaskInput(void *pvParameters)
                                     xQueueSend(queueSound, &event, 0);
                                     xSemaphoreGive(xSerialMutex);
                                     GoodPass(InputUser, 15, 15);
-                                    historique.push_back("demande mdp: " + InputUser + " -> correct");
+                                    historique.push_back(getFormattedTime() + "demande mdp: " + InputUser + " -> correct");
                                 }
                                 else
                                 {
@@ -240,7 +241,7 @@ void TaskInput(void *pvParameters)
                                     xQueueSend(queueSound, &event, 0);
                                     xSemaphoreGive(xSerialMutex);
                                     ShakeWrongPass(InputUser, 15, 15);
-                                    historique.push_back("demande mdp: " + InputUser + " -> wrong");
+                                    historique.push_back(getFormattedTime() + "demande mdp: " + InputUser + " -> wrong");
                                 }
                             }
                         }
@@ -338,7 +339,7 @@ void TaskInput(void *pvParameters)
                     M5.Lcd.setTextColor(TFT_BLACK);
                     M5.Lcd.setTextSize(2.5);
                     M5.Display.print("Time out 2000ms");
-                    historique.push_back("demande RFID: " + uid + " -> timeout");
+                    historique.push_back(getFormattedTime() + "demande RFID: " + uid + " -> timeout");
                     xSemaphoreGive(xSerialMutex);
                 }
                 else
@@ -352,7 +353,7 @@ void TaskInput(void *pvParameters)
                         ev = EVENT_GOOD;
                         xQueueSend(queueSound, &ev, 0);
                         xSemaphoreGive(xSerialMutex);
-                        historique.push_back("demande RFID: " + uid + " -> correct and authorized (cam off)");
+                        historique.push_back(getFormattedTime() + "demande RFID: " + uid + " -> correct and authorized (cam off)");
                     }
                     else
                     {
@@ -368,7 +369,7 @@ void TaskInput(void *pvParameters)
                             xSemaphoreGive(xSerialMutex);
                             M5.Display.print("unauthorized");
 
-                            historique.push_back("demande RFID: " + uid + " -> correct but unauthorized (cam off)");
+                            historique.push_back(getFormattedTime() + "demande RFID: " + uid + " -> correct but unauthorized (cam off)");
                         }
                         else
                         {
@@ -376,7 +377,7 @@ void TaskInput(void *pvParameters)
                             ev = EVENT_WRONG;
                             xQueueSend(queueSound, &ev, 0);
                             xSemaphoreGive(xSerialMutex);
-                            historique.push_back("demande RFID: " + uid + " -> wrong");
+                            historique.push_back(getFormattedTime() + "demande RFID: " + uid + " -> wrong");
                             ShakeWrongPass("Wrong", 15, 15);
                         }
                     }
@@ -414,7 +415,7 @@ void TaskInput(void *pvParameters)
                     // Timeout → retour digicode
                     ev = EVENT_WRONG;
                     xQueueSend(queueSound, &ev, 0);
-                    historique.push_back("PassAdmin: " + InputPassAdmin + " -> timeout");
+                    historique.push_back(getFormattedTime() + "PassAdmin: " + InputPassAdmin + " -> timeout");
                     xSemaphoreGive(xSerialMutex);
                     PrintDigi();
                     
@@ -430,7 +431,7 @@ void TaskInput(void *pvParameters)
                     {
                         ev = EVENT_GOOD;
                         xQueueSend(queueSound, &ev, 0);
-                        historique.push_back("PassAdmin: " + InputPassAdmin + " ->  correct");
+                        historique.push_back(getFormattedTime() + "PassAdmin: " + InputPassAdmin + " ->  correct");
                         xSemaphoreGive(xSerialMutex);
                         GoodPass("OK", 15, 15);
                         DrawOptionMenu();
@@ -439,7 +440,7 @@ void TaskInput(void *pvParameters)
                     {
                         ev = EVENT_WRONG;
                         xQueueSend(queueSound, &ev, 0);
-                        historique.push_back("PassAdmin: " + InputPassAdmin + " -> incorrect");
+                        historique.push_back(getFormattedTime() + "PassAdmin: " + InputPassAdmin + " -> incorrect");
                         xSemaphoreGive(xSerialMutex);
                         PrintDigi();
                         
@@ -827,7 +828,7 @@ bool pairing(bool cancellable)
                     M5.Lcd.fillRoundRect(boxX, boxY, boxW, boxH, 10, GREEN);
                     M5.Lcd.setTextColor(WHITE, GREEN);
                     M5.Lcd.drawString("Appaire !", 120, boxY + boxH / 2);
-                    historique.push_back("Pairing: hub " + IDhub);
+                    historique.push_back(getFormattedTime() + "Pairing: hub " + IDhub);
                     delay(1000);
                     return true;
                 }
@@ -1234,32 +1235,56 @@ void PageHistorique()
     // Afficher l'historique
     int y = 55;
     for (int i = historique.size() - 1; i >= 0; i--)
+{
+    String ligne = historique[i];
+    
+    int indexFinDate = ligne.indexOf(']');
+    // On cherche le ':' de l'action UNIQUEMENT après la date pour ne pas prendre celui de l'heure
+    int sep = ligne.indexOf(':', indexFinDate + 1); 
+
+    if (indexFinDate != -1 && sep != -1)
     {
-        String ligne = historique[i];
-        int sep = ligne.indexOf(':');
+        // 1. L'horodatage (Ex: "[14:32:05] ")
+        String datePart = ligne.substring(0, indexFinDate + 1);
+        
+        // 2. L'action (Ex: "demande mdp: ")
+        String actionPart = ligne.substring(indexFinDate + 1, sep + 1);
+        actionPart.trim(); // Nettoie les espaces superflus
+        
+        // 3. Le résultat (Ex: " correct")
+        String resultatPart = ligne.substring(sep + 1);
 
-        if (sep != -1)
-        {
-            // Partie avant ':'
-            M5.Lcd.setTextColor(TFT_DARKGREY, TFT_BLACK);
-            M5.Lcd.setCursor(10, y);
-            M5.Lcd.print(ligne.substring(0, sep + 1));
+        // --- AFFICHAGE SUR 3 LIGNES ---
 
-            // Partie après ':' à la ligne
-            M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-            M5.Lcd.setCursor(10, y + 12);
-            M5.Lcd.print(ligne.substring(sep + 1));
+        // Ligne 1 : Date/Heure en gris foncé
+        M5.Lcd.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        M5.Lcd.setCursor(10, y);
+        M5.Lcd.print(datePart);
+        y += 12; // Premier retour à la ligne (après le ']')
 
-            y += 30;
-        }
-        else
-        {
-            M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-            M5.Lcd.setCursor(10, y);
-            M5.Lcd.print(ligne);
-            y += 20;
-        }
+        // Ligne 2 : L'action (ex: "demande mdp:") en blanc
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+        M5.Lcd.setCursor(10, y);
+        M5.Lcd.print(actionPart);
+        y += 12; // Deuxième retour à la ligne (après le ':')
+
+        // Ligne 3 : Le résultat (ex: "correct") en bleu cyan (ou blanc) pour bien différencier
+        M5.Lcd.setTextColor(TFT_CYAN, TFT_BLACK);
+        M5.Lcd.setCursor(10, y);
+        M5.Lcd.print(resultatPart);
+
+        // Espace entre deux blocs d'historique complets
+        y += 18; 
     }
+    else
+    {
+        // Mode de secours si la ligne n'a pas le format attendu
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+        M5.Lcd.setCursor(10, y);
+        M5.Lcd.print(ligne);
+        y += 16;
+    }
+}
 
     while (true)
     {
@@ -1345,14 +1370,14 @@ void PageChangeCredentials()
 
                             M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
                             M5.Lcd.drawString("Modifie avec succes", 120, 230);
-                            historique.push_back("Password changed successfully with: " + Newpass);
+                            historique.push_back(getFormattedTime() + "Password changed successfully with: " + Newpass);
                         }
                     }
                     else
                     {
                         M5.Lcd.setTextColor(TFT_RED, TFT_BLACK);
                         M5.Lcd.drawString("Erreur communication", 120, 230);
-                        historique.push_back("Password change failed: communication error ");
+                        historique.push_back(getFormattedTime() + "Password change failed: communication error ");
                     }
                     xSemaphoreGive(xSerialMutex);
                 }
@@ -1419,19 +1444,19 @@ void PageChangeCredentials()
                                     {
                                         M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
                                         M5.Lcd.drawString("Badge ajoute !", 120, 230);
-                                        historique.push_back("RFID added: " + uid);
+                                        historique.push_back(getFormattedTime() + "RFID added: " + uid);
                                     }
                                     else if (result == "already")
                                     {
                                         M5.Lcd.setTextColor(TFT_YELLOW, TFT_BLACK);
                                         M5.Lcd.drawString("Badge deja connue", 120, 230);
-                                        historique.push_back("RFID already registered: " + uid);
+                                        historique.push_back(getFormattedTime() + "RFID already registered: " + uid);
                                     }
                                     else
                                     {
                                         M5.Lcd.setTextColor(TFT_RED, TFT_BLACK);
                                         M5.Lcd.drawString("Badge non reconnu", 120, 230);
-                                        historique.push_back("RFID not recognized: " + uid);
+                                        historique.push_back(getFormattedTime() + "RFID not recognized: " + uid);
                                     }
                                 }
                             }
@@ -1562,6 +1587,16 @@ String InputUserRedMode()
 }
 void manageHistorique(void)
 {
-    while (historique.size() > 7)
+    while (historique.size() > 5)
         historique.erase(historique.begin());
+}
+
+String getFormattedTime(void) {
+    auto dt = M5.Rtc.getDateTime();
+    char timeStr[20];
+    // Formate l'heure en : [JJ/MM HH:MM:SS]
+    snprintf(timeStr, sizeof(timeStr), "[%02d/%02d %02d:%02d:%02d] ", 
+             dt.date.date, dt.date.month, 
+             dt.time.hours, dt.time.minutes, dt.time.seconds);
+    return String(timeStr);
 }

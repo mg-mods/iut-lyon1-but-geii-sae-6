@@ -1723,7 +1723,7 @@ void drawChangePwd()
 
         uint16_t color = isAdminPwdChange ? C_RED : C_GREY;
         if (i == 9)
-            color = C_RED;
+            color = C_GREY;
         else if (i == 11)
             color = C_DARKGREEN;
 
@@ -1781,7 +1781,7 @@ void handleChangePwdLogic()
 
             uint16_t color = isAdminPwdChange ? C_RED : C_GREY;
             if (i == 9)
-                color = C_RED;
+            color = C_GREY;
             else if (i == 11)
                 color = C_DARKGREEN;
 

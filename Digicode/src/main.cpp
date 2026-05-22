@@ -161,7 +161,7 @@ void setup()
     xTaskCreatePinnedToCore(TaskLed, "LedTask", 4096, NULL, 1, NULL, 0);
 }
 /**
- * @brief Boucle principale Arduino — non utilisée (tout est géré par FreeRTOS).
+ * @brief Boucle principale  — non utilisée (tout est géré par FreeRTOS).
  */
 void loop() {}
 
@@ -516,7 +516,7 @@ void TaskInput(void *pvParameters)
  * Interroge le hub toutes les 2 secondes via Serial2 pour connaître l'état de l'alarme.
  * - Alarme active  : LED rouge allumée, LED verte éteinte.
  * - Alarme inactive: LED verte allumée, LED rouge éteinte.
- * - Hub injoignable: les deux LEDs allumées.
+ * - Hub injoignable: LED jaune allumée.(led rgb rouge + vert)
  *
  * @param pvParameters Paramètre FreeRTOS non utilisé.
  */
@@ -1220,6 +1220,8 @@ void PagePairing(void)
  * @param titre   Titre affiché dans l'en-tête bleu.
  * @param contenu Texte affiché au centre de la page.
  */
+
+ //Surtout utile pour respecter le style graphique pour les futures pages du projet, comme la page d'historique ou de changement de mot de passe admin
 void PageGenerique(String titre, String contenu)
 {
     M5.Lcd.fillScreen(TFT_BLACK);

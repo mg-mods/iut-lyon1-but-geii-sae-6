@@ -19,46 +19,46 @@
 /** @defgroup config Configuration générale
  *  @{
  */
-#define DEBUG 0          ///< Activer (1) ou désactiver (0) les logs série
+#define DEBUG 0 ///< Activer (1) ou désactiver (0) les logs série
 
 /** @} */
 
 /** @defgroup pins Broches matérielles
  *  @{
  */
-#define RST_PIN 33       ///< Broche reset du lecteur RFID MFRC522
-#define SS_PIN 27        ///< Broche chip select du lecteur RFID MFRC522
+#define RST_PIN 33 ///< Broche reset du lecteur RFID MFRC522
+#define SS_PIN 27  ///< Broche chip select du lecteur RFID MFRC522
 
 /** @} */
 
 /** @defgroup leds LEDs de statut
  *  @{
  */
-#define Led_Red 26       ///< Broche LED rouge (alarme active)
-#define Led_Green 25     ///< Broche LED verte (alarme inactive)
+#define Led_Red 26   ///< Broche LED rouge (alarme active)
+#define Led_Green 25 ///< Broche LED verte (alarme inactive)
 
 /** @} */
 
 /** @defgroup serial Communication série RS485
  *  @{
  */
-#define RTtoggle 32      ///< Broche contrôle direction RS485 (TX/RX)
+#define RTtoggle 32 ///< Broche contrôle direction RS485 (TX/RX)
 
-#define Tx 14            ///< Broche TX du port série 2
-#define Rx 13            ///< Broche RX du port série 2
+#define Tx 14 ///< Broche TX du port série 2
+#define Rx 13 ///< Broche RX du port série 2
 /** @} */
 
 // ====================== VARIABLES ======================
 
-String IDdigi  ///< Identifiant MAC du digicode (auto-détecté au démarrage) = "000000000000";
+String IDdigi = "000000000000"; ///< Identifiant MAC du digicode (auto-détecté au démarrage)
 String IDhub = "000000000000";  ///< Identifiant MAC du hub associé (chargé depuis la mémoire flash)
 
-Preferences preferences;  ///< Accès à la mémoire NVS pour la persistance de IDhub
+Preferences preferences; ///< Accès à la mémoire NVS pour la persistance de IDhub
 
-SemaphoreHandle_t xSerialMutex;  ///< Mutex FreeRTOS protégeant l'accès au port série 2
-MFRC522 mfrc522(SS_PIN, RST_PIN);  ///< Instance du lecteur RFID MFRC522
+SemaphoreHandle_t xSerialMutex;   ///< Mutex FreeRTOS protégeant l'accès au port série 2
+MFRC522 mfrc522(SS_PIN, RST_PIN); ///< Instance du lecteur RFID MFRC522
 
-std::vector<String> historique;  ///< Journal horodaté des événements (MDP, RFID, admin)
+std::vector<String> historique; ///< Journal horodaté des événements (MDP, RFID, admin)
 
 // ====================== FREERTOS ======================
 
@@ -67,11 +67,11 @@ std::vector<String> historique;  ///< Journal horodaté des événements (MDP, R
  */
 enum EventType
 {
-    EVENT_GOOD,   ///< Authentification réussie → son de confirmation
-    EVENT_WRONG   ///< Authentification échouée → son d'erreur
+    EVENT_GOOD, ///< Authentification réussie → son de confirmation
+    EVENT_WRONG ///< Authentification échouée → son d'erreur
 };
 
-QueueHandle_t queueSound;  ///< File FreeRTOS d'événements vers TaskSound
+QueueHandle_t queueSound; ///< File FreeRTOS d'événements vers TaskSound
 
 // ====================== PROTOTYPES ======================
 
@@ -405,11 +405,11 @@ void TaskInput(void *pvParameters)
                         ev = EVENT_GOOD;
                         xQueueSend(queueSound, &ev, 0);
                         xSemaphoreGive(xSerialMutex);
-                        historique.push_back(getFormattedTime() + "demande RFID: " + uid + " -> correct and authorized (cam off)");
+                        historique.push_back(getFormattedTime() + "demande RFID: " + uid + " -> correct and authorized");
                     }
                     else
                     {
-                        if (resp.startsWith(FormatStateRFID) && resp.substring(FormatStateRFID.length()) == "false")
+                        if (resp.startsWith(FormatStateRFID) && resp.substring(FormatStateRFID.length()) == "CamOFF")
                         {
 
                             ev = EVENT_WRONG;
@@ -425,12 +425,15 @@ void TaskInput(void *pvParameters)
                         }
                         else
                         {
+                            if (resp.startsWith(FormatStateRFID) && resp.substring(FormatStateRFID.length()) == "false")
+                            {
 
-                            ev = EVENT_WRONG;
-                            xQueueSend(queueSound, &ev, 0);
-                            xSemaphoreGive(xSerialMutex);
-                            historique.push_back(getFormattedTime() + "demande RFID: " + uid + " -> wrong");
-                            ShakeWrongPass("Wrong", 15, 15);
+                                ev = EVENT_WRONG;
+                                xQueueSend(queueSound, &ev, 0);
+                                xSemaphoreGive(xSerialMutex);
+                                historique.push_back(getFormattedTime() + "demande RFID: " + uid + " -> wrong");
+                                ShakeWrongPass("Wrong", 15, 15);
+                            }
                         }
                     }
                 }
@@ -470,7 +473,6 @@ void TaskInput(void *pvParameters)
                     historique.push_back(getFormattedTime() + "PassAdmin: " + InputPassAdmin + " -> timeout");
                     xSemaphoreGive(xSerialMutex);
                     PrintDigi();
-                    
                 }
                 else
                 {
@@ -495,7 +497,6 @@ void TaskInput(void *pvParameters)
                         historique.push_back(getFormattedTime() + "PassAdmin: " + InputPassAdmin + " -> incorrect");
                         xSemaphoreGive(xSerialMutex);
                         PrintDigi();
-                        
                     }
                 }
             }
@@ -1460,56 +1461,56 @@ void PageHistorique()
     // Afficher l'historique
     int y = 55;
     for (int i = historique.size() - 1; i >= 0; i--)
-{
-    String ligne = historique[i];
-    
-    int indexFinDate = ligne.indexOf(']');
-    // On cherche le ':' de l'action UNIQUEMENT après la date pour ne pas prendre celui de l'heure
-    int sep = ligne.indexOf(':', indexFinDate + 1); 
-
-    if (indexFinDate != -1 && sep != -1)
     {
-        // 1. L'horodatage (Ex: "[14:32:05] ")
-        String datePart = ligne.substring(0, indexFinDate + 1);
-        
-        // 2. L'action (Ex: "demande mdp: ")
-        String actionPart = ligne.substring(indexFinDate + 1, sep + 1);
-        actionPart.trim(); // Nettoie les espaces superflus
-        
-        // 3. Le résultat (Ex: " correct")
-        String resultatPart = ligne.substring(sep + 1);
+        String ligne = historique[i];
 
-        // --- AFFICHAGE SUR 3 LIGNES ---
+        int indexFinDate = ligne.indexOf(']');
+        // On cherche le ':' de l'action UNIQUEMENT après la date pour ne pas prendre celui de l'heure
+        int sep = ligne.indexOf(':', indexFinDate + 1);
 
-        // Ligne 1 : Date/Heure en gris foncé
-        M5.Lcd.setTextColor(TFT_DARKGREY, TFT_BLACK);
-        M5.Lcd.setCursor(10, y);
-        M5.Lcd.print(datePart);
-        y += 12; // Premier retour à la ligne (après le ']')
+        if (indexFinDate != -1 && sep != -1)
+        {
+            // 1. L'horodatage (Ex: "[14:32:05] ")
+            String datePart = ligne.substring(0, indexFinDate + 1);
 
-        // Ligne 2 : L'action (ex: "demande mdp:") en blanc
-        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-        M5.Lcd.setCursor(10, y);
-        M5.Lcd.print(actionPart);
-        y += 12; // Deuxième retour à la ligne (après le ':')
+            // 2. L'action (Ex: "demande mdp: ")
+            String actionPart = ligne.substring(indexFinDate + 1, sep + 1);
+            actionPart.trim(); // Nettoie les espaces superflus
 
-        // Ligne 3 : Le résultat (ex: "correct") en bleu cyan (ou blanc) pour bien différencier
-        M5.Lcd.setTextColor(TFT_CYAN, TFT_BLACK);
-        M5.Lcd.setCursor(10, y);
-        M5.Lcd.print(resultatPart);
+            // 3. Le résultat (Ex: " correct")
+            String resultatPart = ligne.substring(sep + 1);
 
-        // Espace entre deux blocs d'historique complets
-        y += 18; 
+            // --- AFFICHAGE SUR 3 LIGNES ---
+
+            // Ligne 1 : Date/Heure en gris foncé
+            M5.Lcd.setTextColor(TFT_DARKGREY, TFT_BLACK);
+            M5.Lcd.setCursor(10, y);
+            M5.Lcd.print(datePart);
+            y += 12; // Premier retour à la ligne (après le ']')
+
+            // Ligne 2 : L'action (ex: "demande mdp:") en blanc
+            M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+            M5.Lcd.setCursor(10, y);
+            M5.Lcd.print(actionPart);
+            y += 12; // Deuxième retour à la ligne (après le ':')
+
+            // Ligne 3 : Le résultat (ex: "correct") en bleu cyan (ou blanc) pour bien différencier
+            M5.Lcd.setTextColor(TFT_CYAN, TFT_BLACK);
+            M5.Lcd.setCursor(10, y);
+            M5.Lcd.print(resultatPart);
+
+            // Espace entre deux blocs d'historique complets
+            y += 18;
+        }
+        else
+        {
+            // Mode de secours si la ligne n'a pas le format attendu
+            M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+            M5.Lcd.setCursor(10, y);
+            M5.Lcd.print(ligne);
+            y += 16;
+        }
     }
-    else
-    {
-        // Mode de secours si la ligne n'a pas le format attendu
-        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-        M5.Lcd.setCursor(10, y);
-        M5.Lcd.print(ligne);
-        y += 16;
-    }
-}
 
     while (true)
     {
@@ -1848,12 +1849,13 @@ void manageHistorique(void)
  *
  * @return String Horodatage entre crochets suivi d'un espace.
  */
-String getFormattedTime(void) {
+String getFormattedTime(void)
+{
     auto dt = M5.Rtc.getDateTime();
     char timeStr[20];
     // Formate l'heure en : [JJ/MM HH:MM:SS]
-    snprintf(timeStr, sizeof(timeStr), "[%02d/%02d %02d:%02d:%02d] ", 
-             dt.date.date, dt.date.month, 
+    snprintf(timeStr, sizeof(timeStr), "[%02d/%02d %02d:%02d:%02d] ",
+             dt.date.date, dt.date.month,
              dt.time.hours, dt.time.minutes, dt.time.seconds);
     return String(timeStr);
 }

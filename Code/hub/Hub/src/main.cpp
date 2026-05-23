@@ -98,7 +98,7 @@ constexpr int OPTION_COUNT = 6;
 int optX[OPTION_COUNT] = {C1_X, C2_X, C1_X, C2_X, C1_X, C2_X};
 int optY[OPTION_COUNT] = {O_Y1, O_Y1, O_Y2, O_Y2, O_Y3, O_Y3};
 const char *optNames[OPTION_COUNT] = {"O1", "O2", "O3", "O4", "O5", "O6"};
-const char *optLabels[OPTION_COUNT] = {"MDP clavier", "MDP Admin", "Ecran", "Appairage", "Badges RFID", "Retour"};
+const char *optLabels[OPTION_COUNT] = {"MDP Clavier", "MDP Admin", "Ecran", "Appairage", "Badges RFID", "Retour"};
 
 /**
  * @brief Énumération des différents écrans (Machine à états de l'interface graphique)
@@ -492,7 +492,7 @@ void handlePassAdminInput(char *buffer)
 
     if (stringPWD == "true")
     {
-        snprintf(message.msg, TRAME_SIZE, "Mdp");
+        snprintf(message.msg, TRAME_SIZE, "Mdp Admin utilisé");
         xQueueSendToBack(queueAffichage, &message, portMAX_DELAY);
     }
 }
@@ -648,7 +648,7 @@ void taskTraiteTrame(void *pvParameters)
 
                 if (i > 0)
                 {
-                    //logSerial(buffer);                   //? Decommenter pour afficher toutes les réceptions
+                    //logSerial(buffer);                 //? Decommenter pour afficher toutes les réceptions
                     if (checkMACisInROM(buffer) == true) // Protège contre les digicodes non appairés
                     {
                         if (strcmp(buffer, "E") == 0)

@@ -40,18 +40,10 @@ uint8_t faceDetector1 = 32; // Broche 1 de la détection faciale
 uint8_t faceDetector2 = 33; // Broche 2 de la détection faciale
 bool RFIDEnabled = false;   // Autorisation temporaire du RFID après détection faciale
 
-// Configuration de la barre LED M5GO Bottom2
+// Configuration de la barre LED
 #define LED_PIN 25
 #define NUM_LEDS 10
 CRGB leds[NUM_LEDS];
-
-// Définition de l'interface série utilisée pour la communication
-#define USE_SERIAL2 // Définir pour utiliser Serial2
-#ifdef USE_SERIAL2
-#define SysSerial Serial2
-#else
-#define SysSerial Serial
-#endif
 
 // ============================================================================
 // DÉCLARATION DES FONCTIONS
@@ -111,7 +103,7 @@ enum Screen
     PAIRING,    /**< Interface pour autoriser un nouveau périphérique */
     KEYPAD,     /**< Pavé numérique pour déverrouiller l'alarme */
     CHANGE_PWD, /**< Interface de modification du code PIN */
-    RFID_LIST   /**< Liste paginée de la base de données des badges RFID */
+    RFID_LIST   /**< Base de données des badges RFID */
 };
 
 // Dimensions et espacements pour les pavés numériques (Keypad)
@@ -200,7 +192,10 @@ char displayBuffer[4][TRAME_SIZE];
 // DESSIN DES ÉCRANS
 // ============================================================================
 
-// Dessine l'écran d'accueil
+/**
+ * @brief Dessine l'écran d'accueil de l'interface
+ * @details Gère l'affichage du statut de l'alarme, de l'historique et des boutons principaux
+ */
 void drawHome()
 {
     uint16_t hBg = locked ? C_ORANGE : C_DARKGREEN;
@@ -268,7 +263,10 @@ void drawHome()
     xSemaphoreGive(lcdMutex); // Libère l'accès à l'écran
 }
 
-// Nettoie les objets Boutons de la mémoire avant chaque transition d'écran
+/**
+ * @brief Nettoie les objets Boutons de la mémoire
+ * @details Supprime tous les boutons avant chaque transition d'écran
+ */
 void clearButtons()
 {
     if (bLock)
@@ -333,7 +331,7 @@ void initHomeButtons()
 
 /**
  * @brief Effectue la transition vers un nouvel écran
- * @param s L'écran cible (de type enum Screen) à afficher
+ * @param s L'écran cible à afficher
  */
 void setScreen(Screen s)
 {
@@ -423,22 +421,25 @@ void drawOptions()
 // GESTION DE LA COMMUNICATION SÉRIE ET COMMANDES DISTANTES
 // ============================================================================
 
-// Interruption lors de la réception de données série
+/**
+ * @brief Fonction de callback lors de la réception de données série
+ * @details Lit les caractères sur le port série 2 et les ajoute à la queue réception.
+ */
 void Serial_callback()
 {
     char c;
-    while (SysSerial.available() > 0)
+    while (Serial2.available() > 0)
     {
-        c = SysSerial.read();
+        c = Serial2.read();
         xQueueSendToBack(queueReceptionSerie, (void *)&c, portMAX_DELAY); // Ajoute à la queue RTOS
     }
 }
 
 /**
- * @brief Traitement de la requête de vérification RFID entrante.
- * @param buffer La trame brute reçue par la communication série.
- * @param IDhub L'adresse MAC locale du Hub.
- * @param IDdigi L'adresse MAC du digicode distant.
+ * @brief Traitement de la requête de vérification RFID entrante
+ * @param buffer La trame brute reçue par la communication série
+ * @param IDhub L'adresse MAC locale du Hub
+ * @param IDdigi L'adresse MAC du digicode distant
  */
 void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
 {
@@ -461,7 +462,12 @@ void handleRFIDInput(char *buffer, const String &IDhub, const String &IDdigi)
     }
 }
 
-// Traitement de la requête Mot de Passe entrante
+/**
+ * @brief Traite la requête de vérification de mot de passe (clavier)
+ * @param buffer Trame brute reçue
+ * @param IDhub Adresse MAC locale du Hub
+ * @param IDdigi Adresse MAC du digicode distant
+ */
 void handleMDPInput(char *buffer, const String &IDhub, const String &IDdigi)
 {
     Serial.println("Demande verif MDP");
@@ -604,7 +610,10 @@ void handlePairing(char *buffer)
     }
 }
 
-// Récupère l'adresse MAC usine (utilisée comme ID du Hub)
+/**
+ * @brief Récupère l'adresse MAC usine
+ * @return L'adresse MAC sous forme de chaîne de caractères
+ */
 String getMacFactory(void)
 {
     uint8_t mac[6];
@@ -619,7 +628,7 @@ String getMacFactory(void)
 }
 
 /**
- * @brief Tâche RTOS (FreeRTOS) : Analyse en continu des trames reçues sur le port série
+ * @brief Tâche : Analyse en continu des trames reçues sur le port série
  * @details Lit uniquement les trames reconnus
  */
 void taskTraiteTrame(void *pvParameters)
@@ -718,7 +727,7 @@ void taskTraiteTrame(void *pvParameters)
 }
 
 /**
- * @brief Tâche RTOS (FreeRTOS) : Gestion matérielle des capteurs et de la sirène.
+ * @brief Tâche : Gestion matérielle des capteurs et de la sirène.
  * @details Gère les états logiques des PINs du capteur de mouvement, du relais de la sirène et de la caméras)
  */
 void taskTraiteSensor(void *pvParameters)
@@ -754,7 +763,7 @@ void taskTraiteSensor(void *pvParameters)
                 xSemaphoreGive(lcdMutex);
             }
 
-            if (locked == true && currentScreen != ALARM) // Déclenchement de l'alarme
+            if (locked == true && currentScreen != ALARM && currentScreen != KEYPAD) // Déclenchement de l'alarme
             {
                 setScreen(ALARM);
             }
@@ -777,7 +786,7 @@ void taskTraiteSensor(void *pvParameters)
         }
 
         // Gestion de la sirène
-        if (currentScreen == ALARM)
+        if (currentScreen == ALARM || (currentScreen == KEYPAD && previousScreenForKeypad == ALARM))
         {
             digitalWrite(alarmSiren, LOW); // Déclenche
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -835,8 +844,9 @@ void setup()
 
     // Chargement de la configuration depuis la mémoire persistante (NVS)
     preferences.begin("preferences", false);
-    // preferences.putString("keyboard_pwd", "1111"); //? Decommenter pour reset le mdp
-    // preferences.putString("mac_digi", "default"); //? Decommenter pour reset l'adresse mac keyboard
+    //// preferences.putString("keyboard_pwd", "1111"); //? Decommenter pour reset le mdp
+    //// preferences.putString("pass_admin", "1234"); //? Decommenter pour reset le mdp admin
+    //// preferences.putString("mac_digi", "default"); //? Decommenter pour reset l'adresse mac keyboard
     keyboardPwd = preferences.getString("keyboard_pwd", "1111");
     PassAdmin = preferences.getString("pass_admin", "1234");
     loadRFIDBadges();
@@ -880,7 +890,7 @@ void setup()
     // Initialisation des queues FreeRTOS
     queueReceptionSerie = xQueueCreate(TRAME_SIZE, sizeof(char));
     queueAffichage = xQueueCreate(3, sizeof(t_message_lcd));
-    SysSerial.onReceive(Serial_callback);
+    Serial2.onReceive(Serial_callback);
 
     // Lancement des différentes Tâches FreeRTOS sur les coeurs de l'ESP32
     xTaskCreatePinnedToCore(taskTraiteTrame, "TraiteTrame", 8192, nullptr, 2, nullptr, 0);
@@ -1143,7 +1153,9 @@ String compareRfid(const char *RFID)
     return verif;
 }
 
-// Formate et renvoie une trace série vers le PC (via USB) avec horodatage
+/**
+ * @brief Formate et envoie une trace série vers le PC
+ */
 void logSerial(const char *format, ...)
 {
     char buffer[128];
@@ -1196,7 +1208,10 @@ void taskGestionLcd(void *pvParameters)
     }
 }
 
-// Parse la chaîne stockée en NVS en vecteur de chaînes de caractères
+/**
+ * @brief Charge les badges RFID depuis la mémoire persistante
+ * @details Transforme la chaîne stockée en un vecteur de chaînes de caractères
+ */
 void loadRFIDBadges()
 {
     rfidBadges.clear();
@@ -1218,7 +1233,10 @@ void loadRFIDBadges()
     }
 }
 
-// Convertit le vecteur de badge en une chaîne compacte et le stocke en NVS
+/**
+ * @brief Sauvegarde les badges RFID dans la mémoire persistante
+ * @details Convertit le vecteur de badges en une chaîne compacte séparée par des ';'
+ */
 void saveRFIDBadges()
 {
     String toStore = "";
@@ -1349,7 +1367,10 @@ void handleRfidListLogic()
     }
 }
 
-// Faire clignoter la barre LED en jaune lors d'une alarme / intrusion
+/**
+ * @brief Fait clignoter la barre LED en jaune
+ * @details Indique une intrusion
+ */
 void BlinkLeds(void)
 {
     static unsigned long lastBlink = 0;
@@ -1373,7 +1394,10 @@ void BlinkLeds(void)
     }
 }
 
-// Animation de "respiration" rouge pour indiquer que l'alarme est armée
+/**
+ * @brief Animation de "respiration" rouge sur la barre LED
+ * @details Indique que l'alarme est armée
+ */
 void fadeLeds(void)
 {
     static bool fading = true;

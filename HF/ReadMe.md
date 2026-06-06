@@ -89,7 +89,7 @@ le VCO, la pll et les mélangeur n’étant pas répertorier sur LTspice sont si
 |F13| 13 560 000hz|
 |Fp| 100 000hz|
 
-![Capture d'écran simulation LTspice 1](documentation/images/Simulation_LTspice1.png)
+![Capture d'écran simulation LTspice 1](documentation/images/Simulation_lTspice1.png)
 
 ![Capture d'écran simulation LTspice 2](documentation/images/Simulation_LTspice2.png)
 
@@ -103,7 +103,7 @@ l’adaptation d'impédance de l’antenne ce fait sur une petite carte relier p
 
 Lors de la livraison des composants, nous n'avons pas reçus des 74HC4046 mais des CD4046BE. bien que le composants ait les mêmes fonctionnalité que le composants que nous avions choisit, sont dimensionnement est bien différent sur les valeurs de résistance nécessaire.
 
-![Schémas Kicad VCO et PLL deuxième version](documentation/images/schema_pll_v2.png)
+![Schémas Kicad VCO et PLL deuxième version](documentation/images/Schema_pll_v2.png)
 
 le vco n'oscille plus à 100kHz mais autours des 130kHz, c'est entre autre due à la datasheet du composant qui n'est pas très lisible:
  	

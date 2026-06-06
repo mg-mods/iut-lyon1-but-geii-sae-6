@@ -12,7 +12,7 @@ BROCHAGE CD4046BE (Emetteur) :
 - Pin 9  (VCO IN)   : Entrée Signal UART (0-5V)
 - Pin 6  (C1A)      : Condensateur 100pF (C1)
 - Pin 7  (C1B)      : Autre patte du condensateur 100pF
-- Pin 11 (R1)       : Résistance 10k ohms (Vers Masse) -> Définit la plage
+- Pin 11 (R1)       : Résistance 33k ohms (Vers Masse) -> Définit la plage
 - Pin 12 (R2)       : Résistance 47k ohms (Vers Masse) -> Définit l'offset (f_min)
 - Pin 4  (VCO OUT)  : SORTIE DU SIGNAL MODULE (Vers le câble)
 
@@ -32,7 +32,7 @@ BROCHAGE CD4046BE (Récepteur) :
 - Pin 3  (COMP IN)  : Relier directement à la Pin 4 (VCO OUT)
 - Pin 4  (VCO OUT)  : (Utilisé pour le bouclage interne vers Pin 3)
 - Pin 6, 7 (C1)     : Condensateur 100pF (Même valeur qu'à l'émetteur)
-- Pin 11 (R1)       : Résistance 10k ohms (Même valeur qu'à l'émetteur)
+- Pin 11 (R1)       : Résistance 33k ohms (Même valeur qu'à l'émetteur)
 - Pin 12 (R2)       : Résistance 47k ohms (Même valeur qu'à l'émetteur)
 
 FILTRE DE BOUCLE ET SORTIE DATA :

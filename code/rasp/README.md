@@ -4,14 +4,14 @@ Branche **Reconnaissance Faciale** du projet **SAE 6 "système d'alarme"** réal
 
 ## Définitions
 > La reconnaissance faciale est une technique qui permet à partir des traits de visage :
-- D’authentifier une personne : c’est-à-dire,  vérifier qu’une personne est bien celle qu’elle prétend être (dans le cadre d’un contrôle d’accès)
-- D’identifier une personne [...]
-En pratique, la reconnaissance peut être réalisée à partir d’images fixes (photos) ou animées (enregistrements vidéo) et se déroule en deux phases :
-- A partir de l’image, un modèle ou « gabarit » qui représente, d’un point de vue informatique, les caractéristiques de ce visage est réalisé.  [...]
-- La phase de reconnaissance est ensuite réalisée par la comparaison de ces modèles préalablement réalisés avec les modèles calculés en direct sur des visages présents sur l’image candidate.
-Dans le cas de l’authentification, le système vérifie si l'identité prétendue est bien la bonne en comparant le modèle du visage présenté au modèle préalablement enregistré correspondant à l’identité prétendue.
-[...]
-La reconnaissance faciale ne doit pas être confondue avec la détection de visage qui caractérise la présence ou non d’un visage dans une image indépendamment de la personne à qui il appartient.
+> - D’authentifier une personne : c’est-à-dire,  vérifier qu’une personne est bien celle qu’elle prétend être (dans le cadre d’un contrôle d’accès)
+> - D’identifier une personne [...]
+> En pratique, la reconnaissance peut être réalisée à partir d’images fixes (photos) ou animées (enregistrements vidéo) et se déroule en deux phases :
+> - A partir de l’image, un modèle ou « gabarit » qui représente, d’un point de vue informatique, les caractéristiques de ce visage est réalisé.  [...]
+> - La phase de reconnaissance est ensuite réalisée par la comparaison de ces modèles préalablement réalisés avec les modèles calculés en direct sur des visages présents sur l’image candidate.
+> Dans le cas de l’authentification, le système vérifie si l'identité prétendue est bien la bonne en comparant le modèle du visage présenté au modèle préalablement enregistré correspondant à l’identité prétendue.
+> [...]
+> La reconnaissance faciale ne doit pas être confondue avec la détection de visage qui caractérise la présence ou non d’un visage dans une image indépendamment de la personne à qui il appartient.
 
 -- CNIL
 

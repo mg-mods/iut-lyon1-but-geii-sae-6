@@ -1,12 +1,13 @@
-# Modulation Haute fréquence:
+# Modulation haute fréquence
 
-## diagrame  de fonctionnement théorique:
+## Diagramme de fonctionnement théorique
+
 | | Valeur |
 | ------ | ------ |
-| signal UART| 9600bps|
-| fréquence porteurse| 100khz|
-| fréquence d'emmission| 13,56Mhz|
-| Puissance d'emmission| 10dbm|
+| Signal UART | 9600 bps |
+| Fréquence porteuse | 100 kHz |
+| Fréquence d'émission | 13,56 MHz |
+| Puissance d'émission | 10 dBm |
 
 ```mermaid
 ---
@@ -52,83 +53,86 @@ stateDiagram
     Mi2
   }
   modulation --> Démodulation
-  Mi1:Microcontroleur
+  Mi1:Microcontrôleur
   V1:VCO
-  Ol1:oscilateur local 13Mhz
-  PB1:filtre passe Bas fc=13,56Mhz
-  PB2:filtre passe Bas Fc=100khz ordre2
-  Me1:mélangeur
-  Me2:mélangeur
-  Ol2:oscilateur local 13Mhz
-  PB3:filtre passe bande centré sur 100kHz ordre2
-  PB4:filtre passe bas Fc=20kHz ordre 2
-  trig:Triger de schmitz
-  PD:Pont diode
-  G:Gain 10DBm
-  ```
-le gain de la partie démodulation se fait avec un AOP transimpédence si à la sortie de l'antenne on doit ampliffier.
-le pont diviseur sert à bien avoir la bonne puissance en entré du mélangeur.
+  Ol1:Oscillateur local 13 MHz
+  PB1:Filtre passe-bas fc=13,56 MHz
+  PB2:Filtre passe-bas Fc=100 kHz ordre 2
+  Me1:Mélangeur
+  Me2:Mélangeur
+  Ol2:Oscillateur local 13 MHz
+  PB3:Filtre passe-bande centré sur 100 kHz ordre 2
+  PB4:Filtre passe-bas Fc=20 kHz ordre 2
+  trig:Trigger de Schmitt
+  PD:Pont de diodes
+  G:Gain 10 dBm
+```
+
+Le gain de la partie démodulation se fait avec un AOP transimpédance si, à la sortie de l'antenne, on doit amplifier le signal.  
+Le pont diviseur sert à bien avoir la bonne puissance en entrée du mélangeur.
 
 ## Simulation LTspice
 
 ![Capture d'écran schémas LTspice](documentation/images/Schémas_LTspice.png)
 
-le VCO, la pll et les mélangeur n’étant pas répertorier sur LTspice sont simuler avec des lignes de commande.
-| Composant| Ligne de commande |
-| ------ | ------ |
-| VCO modulation | ```Bvco vcomod 0 V = 2.5 + 2.5*sgn(sin(2*pi*idt( {Fp}*(1 + 0.05*(V(microout) - 0.5)) )))```|
-| Melangeur Modulation| ```bvmel1 mel 0 V = V(filtre_100k)*V(filtre_13M)```|
-| VCO démodulation | ```Bvcodemod Vco 0 V = 2.5 + 2.5*sgn(sin(2*pi*idt( {Fp}*(1 + 0.1*(V(Demodul) - 0.5)))))```|
-| Mélangeur Démodulation| ```bvmel2 mel2  0 V = V(mel)*V(oscilateur)```|
+Le VCO, la PLL et les mélangeurs n'étant pas répertoriés sur LTspice, ils sont simulés avec des lignes de commande.
 
-### Paramètre de simulation:
-| Paramètre | valeur | 
+| Composant | Ligne de commande |
 | ------ | ------ |
-|Tsim | 5ms|
-|F | 9600hz|
-|F13| 13 560 000hz|
-|Fp| 100 000hz|
+| VCO modulation | `Bvco vcomod 0 V = 2.5 + 2.5*sgn(sin(2*pi*idt( {Fp}*(1 + 0.05*(V(microout) - 0.5)) )))` |
+| Mélangeur modulation | `bvmel1 mel 0 V = V(filtre_100k)*V(filtre_13M)` |
+| VCO démodulation | `Bvcodemod Vco 0 V = 2.5 + 2.5*sgn(sin(2*pi*idt( {Fp}*(1 + 0.1*(V(Demodul) - 0.5)))))` |
+| Mélangeur démodulation | `bvmel2 mel2 0 V = V(mel)*V(oscilateur)` |
+
+### Paramètres de simulation
+
+| Paramètre | Valeur |
+| ------ | ------ |
+| Tsim | 5 ms |
+| F | 9600 Hz |
+| F13 | 13 560 000 Hz |
+| Fp | 100 000 Hz |
 
 ![Capture d'écran simulation LTspice 1](documentation/images/Simulation_lTspice1.png)
 
 ![Capture d'écran simulation LTspice 2](documentation/images/Simulation_LTspice2.png)
 
+## Schémas KiCad théoriques
 
-## Schémas kicad théorique :
-![Schémas Kicad carte principale](documentation/images/Schémas_Kicad.png)
+![Schémas KiCad carte principale](documentation/images/Schémas_Kicad.png)
 
-l’adaptation d'impédance de l’antenne ce fait sur une petite carte relier par un câble BNC.
-  
-## Mise en pratique:
+L'adaptation d'impédance de l'antenne se fait sur une petite carte reliée par un câble BNC.
 
-Lors de la livraison des composants, nous n'avons pas reçus des 74HC4046 mais des CD4046BE. bien que le composants ait les mêmes fonctionnalité que le composants que nous avions choisit, sont dimensionnement est bien différent sur les valeurs de résistance nécessaire.
+## Mise en pratique
 
-![Schémas Kicad VCO et PLL deuxième version](documentation/images/Schema_pll_v2.png)
+Lors de la livraison des composants, nous n'avons pas reçu de 74HC4046 mais des CD4046BE. Bien que ce composant ait les mêmes fonctionnalités que le composant que nous avions choisi, son dimensionnement est bien différent pour les valeurs de résistance nécessaires.
 
-le vco n'oscille plus à 100kHz mais autours des 130kHz, c'est entre autre due à la datasheet du composant qui n'est pas très lisible:
- 	
+![Schémas KiCad VCO et PLL deuxième version](documentation/images/Schema_pll_v2.png)
+
+Le VCO n'oscille plus à 100 kHz mais autour de 130 kHz. C'est entre autres dû à la datasheet du composant, qui n'est pas très lisible :
+
 [lien datasheet CD4046BE](https://www.ti.com/lit/ds/symlink/cd4046b.pdf?HQS=dis-dk-null-digikeymode-dsf-pf-null-wwe&ts=1780683578275&ref_url=https%253A%252F%252Fwww.ti.com%252Fgeneral%252Fdocs%252Fsuppproductinfo.tsp%253FdistId%253D10%2526gotoUrl%253Dhttps%253A%252F%252Fwww.ti.com%252Flit%252Fgpn%252Fcd4046b)
 
-## Travaille réaliser:
-- [x] VCO et modulation à basse fréquence 
-- [x] PLL et démodulation à basse fréquence
-- [ ] utilisation du mélangeur pour basculer en haute fréquence
-- [ ] adaptations en impédance de l'antenne 
-- [ ] utilisation du mélangeur pour basculer en basse fréquence
+## Travail réalisé
 
-![photo de la carte électronique](documentation/images/photo_carte_electrique.jpg)
+- [x] VCO et modulation à basse fréquence
+- [x] PLL et démodulation à basse fréquence
+- [ ] Utilisation du mélangeur pour basculer en haute fréquence
+- [ ] Adaptation en impédance de l'antenne
+- [ ] Utilisation du mélangeur pour basculer en basse fréquence
+
+![Photo de la carte électronique](documentation/images/photo_carte_electrique.jpg)
 
 ## Test de bon fonctionnement
 
-pour vérifier le bon fonctionnement j'ai effectuer des mesures à oscilloscope en entré et en sortie d'une liaison VCO-PLL avec en entré et en sortie un microcontrôleur [RP2040](https://www.waveshare.com/wiki/RP2040-Zero) choisit pour ces deux canaux UART et car les tensions de sorties UART correspondent au microcontrôleurs utilisé dans notre système de surveillance (soit 3.3V).
+Pour vérifier le bon fonctionnement, j'ai effectué des mesures à l'oscilloscope en entrée et en sortie d'une liaison VCO-PLL avec, en entrée et en sortie, un microcontrôleur RP2040 choisi pour ses deux canaux UART et parce que les tensions de sortie UART correspondent aux microcontrôleurs utilisés dans notre système de surveillance (soit 3,3 V).
 
 ![relevé oscilloscope en sortie de la PLL](documentation/images/photo_osciloscope1.jpg)
 
-
-![relevé oscilloscope en sortie de la PLL, apres le filtre](documentation/images/photo_osciloscope2.jpg)
-
+![relevé oscilloscope en sortie de la PLL, après le filtre](documentation/images/photo_osciloscope2.jpg)
 
 ![relevé oscilloscope en sortie de l'AOP](documentation/images/photo_osciloscope3.jpg)
 
-j'ai ensuite envoyer ne série de 100 message similaire a ce qui est envoyer entre le digicode et le hub et j'ai comparé le message d'origine avec le message reçus:
-j'ai maximum 10 message qui sont reçus avec une erreur ou plus soir 10% d'erreur maximum de transmission en basse fréquence.
+J'ai ensuite envoyé une série de 100 messages similaires à ceux qui sont envoyés entre le digicode et le hub, puis j'ai comparé le message d'origine avec le message reçu.
+
+J'ai au maximum 10 messages reçus avec une erreur ou plus, soit 10 % d'erreur maximale de transmission en basse fréquence.

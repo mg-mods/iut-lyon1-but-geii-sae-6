@@ -1,5 +1,4 @@
 # SAE 6 - Module Reconnaissance Faciale - Manuel utilisateur
-Branche **Reconnaissance Faciale** du projet **SAE 6 "système d'alarme"** réalisé dans le cadre de notre troisième année de BUT GEII à l'IUT Lyon 1.
 
 
 ## Première installation, enregistrement d'un nouveau profil facial
@@ -32,7 +31,9 @@ Félicitations, le module de reconnaissance faciale a été correctement paramé
 ### Sujet non-détecté
 Dans le cas où un sujet n'est pas/plus détecté, il faut réenregistrer son profil facial. 
 Avant cela, il est bonne pratique de vérifier la présence du dataset :
+
 `dir ./facial_recognition/dataset`
+
 Vérifiez la présence du profil recherché. Si il n'est pas présent, il faut enregistrer ce Si le dataset est présent mais non fonctionnel, il faut le réenregistrer. 
 Pour se faire, il faut d'abord supprimer le dataset qui lui est associé puis réenregistrer son profil. Pour supprimer un profil du dataset, saisissez la commande suivante dans une fenêtre de terminal :
 `rm ./facial_recognition/dataset/[NOM_PROFIL]`

@@ -41,13 +41,13 @@ Avant cela, il est bonne pratique de vérifier la présence du dataset :
 Vérifiez la présence du profil recherché. Si il n'est pas présent, il faut enregistrer ce Si le dataset est présent mais non fonctionnel, il faut le réenregistrer. 
 Pour se faire, il faut d'abord supprimer le dataset qui lui est associé puis réenregistrer son profil. Pour supprimer un profil du dataset, saisissez la commande suivante dans une fenêtre de terminal :
 
-`rm ./facial_recognition/dataset/[NOM_PROFIL]`
+`rm ./facial_recognition/dataset/[NOM_SUJET]`
 
 Il suffit ensuite d'enregistrer de nouveau le profil (voir la section **Première installation, enregistrement d'un nouveau profil facial**).
 ### Suppression du profil d'un sujet
 Pour supprimer un profil du dataset, saisissez la commande suivante dans une fenêtre de terminal :
 
-`rm ./facial_recognition/dataset/[NOM_PROFIL]`
+`rm ./facial_recognition/dataset/[NOM_SUJET]`
 
 Une fois le profil supprimé du dataset, il est important de mettre à jour la base de données de profils :
 

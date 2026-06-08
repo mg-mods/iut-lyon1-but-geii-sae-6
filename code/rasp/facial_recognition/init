@@ -1,0 +1,2 @@
+python3 -m venv --system-site-packages face_rec
+source face_rec/bin/activate

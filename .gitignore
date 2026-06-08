@@ -417,3 +417,4 @@ FodyWeavers.xsd
 *.msm
 *.msp
 /.vscode
+/code/rasp/facial_recognition/face_rec

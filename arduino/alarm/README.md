@@ -1,48 +1,51 @@
 # SAE 6 - Module Alarme Sonore
-Branche **Reconnaissance Faciale** du projet **SAE 6 "système d'alarme"** réalisé dans le cadre de notre troisième année de BUT GEII à l'IUT Lyon 1.
+Branche **Alarme** du projet **SAE 6 "système d'alarme"** réalisé dans le cadre de notre troisième année de BUT GEII à l'IUT Lyon 1.
 
 
 ## Définitions
-> La reconnaissance faciale est une technique qui permet à partir des traits de visage :
-> - D’authentifier une personne : c’est-à-dire,  vérifier qu’une personne est bien celle qu’elle prétend être (dans le cadre d’un contrôle d’accès)
-> - D’identifier une personne [...]
-> En pratique, la reconnaissance peut être réalisée à partir d’images fixes (photos) ou animées (enregistrements vidéo) et se déroule en deux phases :
-> - A partir de l’image, un modèle ou « gabarit » qui représente, d’un point de vue informatique, les caractéristiques de ce visage est réalisé.  [...]
-> - La phase de reconnaissance est ensuite réalisée par la comparaison de ces modèles préalablement réalisés avec les modèles calculés en direct sur des visages présents sur l’image candidate.
-> Dans le cas de l’authentification, le système vérifie si l'identité prétendue est bien la bonne en comparant le modèle du visage présenté au modèle préalablement enregistré correspondant à l’identité prétendue.
+> Une alarme sonore anti-intrusion est un équipement conçu pour émettre un signal sonore puissant en cas de tentative d'effraction. 
+> Ce signal, souvent supérieur à 100 décibels, est suffisamment intense pour désorienter les intrus, alerter les occupants des lieux et prévenir le voisinage.
 > [...]
-> La reconnaissance faciale ne doit pas être confondue avec la détection de visage qui caractérise la présence ou non d’un visage dans une image indépendamment de la personne à qui il appartient.
+> Une fois l’anomalie confirmée, la sirène se déclenche instantanément, produisant un bruit intense audible à longue distance. 
+> [...]
+> Le bruit intense pousse les cambrioleurs à fuir avant qu’ils ne puissent agir. C’est une réaction instinctive face à un environnement hostile.Elle prévient les occupants des lieux et le voisinage d’une tentative d’effraction, permettant une réaction rapide.
 
--- CNIL
+-- Verisure
 
 
 ## Synotpique global
-La reconnaissance faciale, telle qu'implémentée dans notre système, utilise différents composants logiciels et matériels dont voici un diagramme explicatif global :
-[![](https://mermaid.ink/img/pako:eNp1kt-PojAQx_-Vps9qEDEgD5s0gsYcCwZZL7t4D71SkRy0pJTTXeP_fuWHcreb42U60898Z5jpFRKeUGjDY87P5ISFBF54YEB9BBdU4HjZmh9drOSVPF7irTKgFJzQqspY2l8eMaGCkniFSYZzoI48ZZnMOGvYVOCi6EleUkZ-x4Eyy30fSyQ5ktihkhLZSlX3C3EWVS5jR-CzEq3qXN6vKiIoZfGuNX0sLTMer7eboPdxfXmKOODyRAUgvCg5o6xV6DXqn6q18gT2WUI5yFhZy-5mGAIYjx0UIbCLQhc9j8dP_SA6jrLki9i2G84g1CUooaXnohCsQvTsNkL90AawDzQk2kYvoTuw3dgGtPMViXzkvb79RbbD_NJdG1V46CpdH4Tu7sWLWrwb8ad_cLKqzPH7UK_HmoKOA4K9G3roFSDfAc5mt23Ojwa6zfy3g80KfPOD7z5YoWXLN1v7VD6o5T-raBCVGgXrteeC7cbfqX2gqE1XS37UgiOYiiyBthQ1HUG1vwI3Lrw2yAGqh1DQA7TVMcHi1wEe2E3llJi9cV7c0wSv0xO0jzivlFeXCZbUyXDzih9RoapRseQ1k9C2ZlorAu0rvEB7PJ2bk5lm6AvNNKeGZcysEXyHtm5YE13TrdlcUxmaad1G8KOtO51oi4U-NS3d0M25YcxufwD9ax0W?type=png)](https://mermaid.live/edit#pako:eNp1kt-PojAQx_-Vps9qEDEgD5s0gsYcCwZZL7t4D71SkRy0pJTTXeP_fuWHcreb42U60898Z5jpFRKeUGjDY87P5ISFBF54YEB9BBdU4HjZmh9drOSVPF7irTKgFJzQqspY2l8eMaGCkniFSYZzoI48ZZnMOGvYVOCi6EleUkZ-x4Eyy30fSyQ5ktihkhLZSlX3C3EWVS5jR-CzEq3qXN6vKiIoZfGuNX0sLTMer7eboPdxfXmKOODyRAUgvCg5o6xV6DXqn6q18gT2WUI5yFhZy-5mGAIYjx0UIbCLQhc9j8dP_SA6jrLki9i2G84g1CUooaXnohCsQvTsNkL90AawDzQk2kYvoTuw3dgGtPMViXzkvb79RbbD_NJdG1V46CpdH4Tu7sWLWrwb8ad_cLKqzPH7UK_HmoKOA4K9G3roFSDfAc5mt23Ojwa6zfy3g80KfPOD7z5YoWXLN1v7VD6o5T-raBCVGgXrteeC7cbfqX2gqE1XS37UgiOYiiyBthQ1HUG1vwI3Lrw2yAGqh1DQA7TVMcHi1wEe2E3llJi9cV7c0wSv0xO0jzivlFeXCZbUyXDzih9RoapRseQ1k9C2ZlorAu0rvEB7PJ2bk5lm6AvNNKeGZcysEXyHtm5YE13TrdlcUxmaad1G8KOtO51oi4U-NS3d0M25YcxufwD9ax0W)
-
-
-## Synoptique de l'analyse des images
-[![](https://mermaid.ink/img/pako:eNplUkuPmzAQ_ivWnLpSiIAEEjisSgPbRs2GiOTSDT04YBK0vGQbddMo_722Qxa6y8GS_T1m5hsukNQpAReyov6TnDDlaBXFFRJfRnFJvl4QO-GGuCgr8kbjNB-hAh9I4aIYllXT8hsvBnS9ydJDr2lonRDGCBuINrTO8oIwlGKOD5gNpOSN030gDpxwkqIMC_Hvd6ih2T6GHm46oziuvigqkv1LjOaM5wl7iKFTJ3XZ0P1CnJiS7q3E7HUfEdYWPK-O6iqaPBPa4XXLxXT9LP-PHipUzXDrf5AZ0jRv7a1-vQSa9qiGusOsPRwpbk5okBzCFS7OLGc3yj0HYeIHu2CxQ9sf3ibYdlYihC6QKv3k2g04TEzYfA_WQeTtAh89eYsAbaLwablSralY7lsTzO0ujATN93beB3hQTb0ObNGzt_0p6TLBj6SuGFr6ckur0PNlG1H4jPxvD1J0S7nfiNCoLhdhGPnLtfDf9jQYwZHmKbictmQEJaEllle4SIMY-InIP1HuJ8X0NYa4ugpNg6uXui7vMlq3xxO4GS6YuLWN2CHxcywiLN9fqRiY0EXdVhzcqe3MlQu4F3gDVzPt6diZ6vZsMjfnhmmN4AzuZOKM56Y-0x3TnFuGZV9H8FeVNcamqU9mlm7YjmPZtmFd_wEDORa6?type=png)](https://mermaid.live/edit#pako:eNplUkuPmzAQ_ivWnLpSiIAEEjisSgPbRs2GiOTSDT04YBK0vGQbddMo_722Qxa6y8GS_T1m5hsukNQpAReyov6TnDDlaBXFFRJfRnFJvl4QO-GGuCgr8kbjNB-hAh9I4aIYllXT8hsvBnS9ydJDr2lonRDGCBuINrTO8oIwlGKOD5gNpOSN030gDpxwkqIMC_Hvd6ih2T6GHm46oziuvigqkv1LjOaM5wl7iKFTJ3XZ0P1CnJiS7q3E7HUfEdYWPK-O6iqaPBPa4XXLxXT9LP-PHipUzXDrf5AZ0jRv7a1-vQSa9qiGusOsPRwpbk5okBzCFS7OLGc3yj0HYeIHu2CxQ9sf3ibYdlYihC6QKv3k2g04TEzYfA_WQeTtAh89eYsAbaLwablSralY7lsTzO0ujATN93beB3hQTb0ObNGzt_0p6TLBj6SuGFr6ckur0PNlG1H4jPxvD1J0S7nfiNCoLhdhGPnLtfDf9jQYwZHmKbictmQEJaEllle4SIMY-InIP1HuJ8X0NYa4ugpNg6uXui7vMlq3xxO4GS6YuLWN2CHxcywiLN9fqRiY0EXdVhzcqe3MlQu4F3gDVzPt6diZ6vZsMjfnhmmN4AzuZOKM56Y-0x3TnFuGZV9H8FeVNcamqU9mlm7YjmPZtmFd_wEDORa6)
+L'alarme sonore, telle qu'implémentée dans notre système, utilise différents composants logiciels et matériels dont voici un diagramme explicatif global :
+[![](https://mermaid.ink/img/pako:eNp9VN9v2jAQ_ldOftokqCAtJeRhWgdpa4kGRLJVWtMH1zlC1GBnttOtQ_zvu5BSKA_LU3y678d9vmTDpM6QBWxZ6t9yJYyD6SJVQE-hqtp93YBdiQoDWJZF1XWm6EApnrAMIGW86YBMOJEy2LYopxXGWHL1X2RCXWCxROnSVO2UPlLYaWGPxCujJVqL9oTDglAZyFdZ0mtJkAOLrt0H_9lT2ZWFkUcMcYXiGQ1IYjoA5Qrl87xQ9mHcvMGcRxasEw7t4z4Z9yLKh5SN9Zo0sCmgoZKlYT6N53c0Ak0nP6fsDVGZpcFfD3Ojs1rS5EWuRPm411N5MwvJCZXvY8FslwP1tF1HdwLdrte4irvdLwe3J-apiV_Dt1lyC1eLEHj0I1wk4aSBtPZPsqb-mzCBOJyGY-qDW35DyGgC09k9JLMojHen5DbkC6ART4ls_ZQbUa0g1jVdSY4KjXCFVlDqvJBt0yE8krvm0dX0jfqek8_J98VVwmdRQ90G1qJQZccpEjTmN4Rt-tpb3of0buJovz7ov29nGw-FCDxuRmyjbC_iRHVfJkgU3h8SapwDP0qUdVhuiowFztTYYWs0a9Ec2aYhSplb4Zr2rNm8TJjnlKVqS5hKqJ9ar_cwo-t8xYIlbROd6oo-L5wUguZav1cNmUMzpqQdC879Xm_HwoIN-8MCf3DmUc33fH8wvPD6ow57ZUH_vHd23vcG_YE38If-qHe57bC_O93emT-8GI1GvcHoYjj0Lvt-h2FWOG3u2n_D7hex_Qd3qVDz?type=png)](https://mermaid.live/edit#pako:eNp9VN9v2jAQ_ldOftokqCAtJeRhWgdpa4kGRLJVWtMH1zlC1GBnttOtQ_zvu5BSKA_LU3y678d9vmTDpM6QBWxZ6t9yJYyD6SJVQE-hqtp93YBdiQoDWJZF1XWm6EApnrAMIGW86YBMOJEy2LYopxXGWHL1X2RCXWCxROnSVO2UPlLYaWGPxCujJVqL9oTDglAZyFdZ0mtJkAOLrt0H_9lT2ZWFkUcMcYXiGQ1IYjoA5Qrl87xQ9mHcvMGcRxasEw7t4z4Z9yLKh5SN9Zo0sCmgoZKlYT6N53c0Ak0nP6fsDVGZpcFfD3Ojs1rS5EWuRPm411N5MwvJCZXvY8FslwP1tF1HdwLdrte4irvdLwe3J-apiV_Dt1lyC1eLEHj0I1wk4aSBtPZPsqb-mzCBOJyGY-qDW35DyGgC09k9JLMojHen5DbkC6ART4ls_ZQbUa0g1jVdSY4KjXCFVlDqvJBt0yE8krvm0dX0jfqek8_J98VVwmdRQ90G1qJQZccpEjTmN4Rt-tpb3of0buJovz7ov29nGw-FCDxuRmyjbC_iRHVfJkgU3h8SapwDP0qUdVhuiowFztTYYWs0a9Ec2aYhSplb4Zr2rNm8TJjnlKVqS5hKqJ9ar_cwo-t8xYIlbROd6oo-L5wUguZav1cNmUMzpqQdC879Xm_HwoIN-8MCf3DmUc33fH8wvPD6ow57ZUH_vHd23vcG_YE38If-qHe57bC_O93emT-8GI1GvcHoYjj0Lvt-h2FWOG3u2n_D7hex_Qd3qVDz)
 
 
 ## Liste argumentée du matériel
-Afin de mener à bien ce projet, le module de reconnaissance faciale a nécessité les composants matériels suivants :
-- 1x Raspberry Pi 5
-    > La Raspberry Pi 5 a été choisie pour sa simplicité d'utilisation, sa taille et sa puissance de calcul suffisante pour nos besoins. La Raspberry supporte en effet un environnement Linux qui permet de faire tourner le programme de reconnaissance faciale et permet facilement de paramétrer ce dernier.
-- 1x webcam USB
-    > Pour les besoins du projet, nous avons utilisé une webcam USB Logitech de modèle inconnu. Cette caméra, bien que d'assez mauvaise qualité, était suffisante pour réaliser notre batterie de tests tout en nous permettant d'avoir un rendu satisfaisant. Le gros avantage de cette caméra reste sa très faible consommation d'énergie par rapport à une caméra de meilleure qualité (ou un autre type de caméra, la webcam n'étant dépendante que de l'alimentation USB-A 1.0 de la Raspberry)
+Afin de mener à bien ce projet, le module d'alarme sonore a nécessité les composants matériels suivants :
+- 1x Arduino UNO
+    > L'Arduino UNO a été choisie pour sa simplicité d'utilisation. Un simple branchement et un petit code suffisent pour réaliser l'intégralité du module. De plus, l'Arduino UNO est idéale pour des besoins de prototypage.
+- 1x haut-parleur à compression RUP5
+    > Un haut-parleur à compression est un actionneur auditif très simple mais robuste. Piloté par simplement deux fils d'alimentation, ce petit haut-parleur est capable de fonctionner entre 0.01 et 13V (bien que nos tests ont montré par la suite qu'il était capable de monter à 16V) et de produire un son à plus de 100 dB. Dans notre cas, le relier à une Arduino UNO (tension de sortie max sur PWM: 5V) serait donc suffisant pour obtenir un son tonique. Il nous suffit de faire varier la tension de son alimentation pour générer un signal sonore.
 
 ## Détail du travail réalisé
-Après avoir déployé la dernière version compatible de Raspbian OS (distribution de Linux optimisée pour les Raspberry) sur notre carte et avoir réalisé les configurations système nécessaires (clavier, souris, mise à jour des bibliothèques, changement de quelques environnements), j'ai pu me concentrer sur la reconnaissance faciale. Le projet a pour base les bibliothèques OpenCV, ImUtils et face-recognition. OpenCV permet d'analyser des images (détection de visage, détection de formes et de motifs). ImUtils fournit un lot d'utilitaires permettant de réaliser des opérations sur des images (rotation, déplacement, redimensionnement). Enfin, face-recognition permet de reconnaître des formes et des motifs dans les visages afin de créer un profil (c'est-à-dire un lot de caractéristiques faciales à partir d'un ensemble d'images).
-Le programme va ensuite utiliser ces bibliothèques selon la manière décrite par les synoptiques ci-dessus : 
-- On récupère les images capturées par la caméra afin de leur appliquer différents filtres (exposition, luminosité, contraste, couleurs, netteté des contours, réduction de bruit, flous gaussiens, etc) pour améliorer la précision du programme
-- On va ensuite prendre chaque image filtrée et utiliser OpenCV pour détecter le ou les visage(s) présent(s) dans l'image grâce à une série de motifs prédéfinis (yeux, bouche, dents, nez, sourcils, barbe/moustache, mâchoire, etc); on répètera les étapes suivantes pour chaque visage détecté
-- On extrait le visage de l'image afin de mieux le traiter, indépendamment du reste de l'image
-- On analyse le visage afin d'en extraire ses caractéristiques exactes (forme de la bouche, du nez, des yeux, des sourcils, etc) ; l'ensemble des caractéristiques d'un visage forme un profil
-- On compare le profil perçu avec la base de données des profils existants (profils connus) : si le profil perçu correspond à un profil connu, alors on renvoie le nom du profil au programme principal, sinon on renvoie "Unknown"
-- Que le profil soit connu ou non, l'emplacement du visage dans l'image est également renvoyé au programme principal
-- Le programme principal récupère ces informations : si le visage est connu, alors il commute deux PINs du GPIO (l'un passe à l'état haut, l'autre à l'état bas)
-- On utilise l'emplacement du visage dans l'image pour afficher un rectangle contenant le nom du profil (ou "Unknown") autour du visage détecté (si l'affichage est actif)
-- On répète ces opérations tant que le programme tourne et pour chaque visage détecté
-Comme mentionné, on utilise deux PINs du GPIO. Ces PINs servent à communiquer avec les autres composants. En temps normal, le PIN 13 (GPIO_27) est à l'état bas et le PIN 11 (GPIO_17) à l'état haut. Lorsqu'on détecte un visage, on inverse ces deux états. Utiliser deux PINs dont on inverse les états permet de détecter les erreurs de transmission et assure que l'information envoyée est bonne.
-Il a ensuite fallu régler précisémment les filtres graphiques pour obtenir les meilleurs résultats possibles. Ces filtres se règlent à l'aide de variables présents dans les fichiers d'OpenCV et d'ImUtils.
+Après avoir câblé le haut-parleur à un PWM de la carte, il m'a suffit de rédiger un petit programme qui génère un signal à partir d'une fréquence donnée. Le programme a ensuite évolué pour n'activer la sortie sonore que lorsque l'entrée est dans un certain état. J'ai par la suite ajouté la possibilité d'enregistrer plusieurs sons alarmes deux-tons avec des cycles différents puis de rajouter un bouton pour changer de son. Le programme fonctionne ensuite de la manière décrite par le synoptique ci-dessus :
+- On scrute les entrées : si l'entrée haute passe à l'état bas et que l'entrée basse passe à l'état haut, alors la centrale nous commande d'activer l'alarme
+- On charge les tons hauts, tons bas et les cycles stockés en mémoire
+- On converti les cycles (en cycles par minute, CPM) en intervals (exemple : 60 CPM <=> interval de 1 sec entre chaque cycle <=> 0.5 sec entre chaque ton)
+- On génère le premier ton
+- Lorsque l'on arrive au bout de l'interval, on génère le deuxième ton
+- Lorsque l'on arrive au bout de l'interval, on repasse au premier ton
+- On continue à alterner entre ton haut et ton bas jusqu'à qu'une des entrées repasse à son état par défaut
+En parallèle, une deuxième logique tourne :
+- On scrute l'entrée de sélection des tonalités
+- Si on détecte une impulsion à la masse, alors on change de ton
+- On change l'identifiant de tonalité sélectionné
+- On met à jour les intervals à partir du cycle de la nouvelle tonalité
+- On force l'utilisation des nouveaux tons haut, tons bas et intervals
+On répète l'ensemble de ces opérations tant que la carte est active.
+Comme mentionné, on utilise deux PINs du GPIO pour détecter si la centrale commande à l'alarme de s'activer. En temps normal, le PIN 13 est à l'état bas et le PIN 12 à l'état haut. Lorsque la centrale nous déclenche, ces deux états sont inversés. Utiliser deux PINs dont on inverse les états permet de détecter les erreurs de transmission et assure que l'information envoyée est bonne.
+On utilise également un troisième PIN du GPIO, le PIN 7, pour changer la tonalité sélectionnée. Utiliser une impulsion à l'état bas permet également de détecter des erreurs et d'éviter une activation accidentelle.
+
+
+## Améliorations possibles
+Une des grandes limitations de ce module est sa puissance. Le module est encore au stade de prototype et le système alimente le haut-parleur en 5 V ce qui lui donne une puissance sonore de sortie estimée à 75 dB. Pour augmenter cette puissance, il faudrait utiliser une source d'alimentation externe pilotée par le PWM de l'Arduino pour obtenir les bonnes tonalités. 
+De plus, il suffit actuellement de couper l'alimentation de l'Arduino pour neutraliser l'alarme. Ce module sert plus de moyen de démonstration pour prouver que le reste du système fonctionne, mais il présente déjà du potentiel et de bonnes pistes ont été abordées. Cependant, il reste loin d'être un produit finit.
+

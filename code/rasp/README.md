@@ -34,6 +34,7 @@ Afin de mener à bien ce projet, le module de reconnaissance faciale a nécessit
 
 ## Détail du travail réalisé
 Après avoir déployé la dernière version compatible de Raspbian OS (distribution de Linux optimisée pour les Raspberry) sur notre carte et avoir réalisé les configurations système nécessaires (clavier, souris, mise à jour des bibliothèques, changement de quelques environnements), j'ai pu me concentrer sur la reconnaissance faciale. Le projet a pour base les bibliothèques OpenCV, ImUtils et face-recognition. OpenCV permet d'analyser des images (détection de visage, détection de formes et de motifs). ImUtils fournit un lot d'utilitaires permettant de réaliser des opérations sur des images (rotation, déplacement, redimensionnement). Enfin, face-recognition permet de reconnaître des formes et des motifs dans les visages afin de créer un profil (c'est-à-dire un lot de caractéristiques faciales à partir d'un ensemble d'images).
+
 Le programme va ensuite utiliser ces bibliothèques selon la manière décrite par les synoptiques ci-dessus : 
 - On récupère les images capturées par la caméra afin de leur appliquer différents filtres (exposition, luminosité, contraste, couleurs, netteté des contours, réduction de bruit, flous gaussiens, etc) pour améliorer la précision du programme
 - On va ensuite prendre chaque image filtrée et utiliser OpenCV pour détecter le ou les visage(s) présent(s) dans l'image grâce à une série de motifs prédéfinis (yeux, bouche, dents, nez, sourcils, barbe/moustache, mâchoire, etc); on répètera les étapes suivantes pour chaque visage détecté
@@ -44,12 +45,16 @@ Le programme va ensuite utiliser ces bibliothèques selon la manière décrite p
 - Le programme principal récupère ces informations : si le visage est connu, alors il commute deux PINs du GPIO (l'un passe à l'état haut, l'autre à l'état bas)
 - On utilise l'emplacement du visage dans l'image pour afficher un rectangle contenant le nom du profil (ou "Unknown") autour du visage détecté (si l'affichage est actif)
 - On répète ces opérations tant que le programme tourne et pour chaque visage détecté
+
 Comme mentionné, on utilise deux PINs du GPIO. Ces PINs servent à communiquer avec les autres composants. En temps normal, le PIN 13 (GPIO_27) est à l'état bas et le PIN 11 (GPIO_17) à l'état haut. Lorsqu'on détecte un visage, on inverse ces deux états. Utiliser deux PINs dont on inverse les états permet de détecter les erreurs de transmission et assure que l'information envoyée est bonne.
+
 Il a ensuite fallu régler précisémment les filtres graphiques pour obtenir les meilleurs résultats possibles. Ces filtres se règlent à l'aide de variables présents dans les fichiers d'OpenCV et d'ImUtils.
 
 
 ## Améliorations possibles
 Une des grandes limitations de ce module est sa précision. La webcam utilisée, bien que peu onéreuse et facile à mettre en place, a une très mauvaise qualité d'image ce qui ne facilite pas la reconnaissance faciale. Lors de tests effectués, remplacer les images du dataset (habituellement capturées à l'aide de la webcam) par des photos prises avec un téléphone améliorait déjà la précision des résultats. Bien que nous n'avons pas pu tester la capacité du programme avec une meilleure caméra, il semble logique de penser qu'une caméra de meilleure qualité (meilleure résolution, moins de bruit, meilleure gestion de la lumière et des contrastes, espace colorimétrique plus large) serait bénéfique pour le projet.
+
 Le deuxième obstacle rencontré est lié à la performance de la Raspberry. Bien que suffisante dans notre contexte de prototypage, la détection d'un visage faisait drastiquement chuter le nombre d'images par secondes analysées par le programme (~35 IPS en l'absence de visage contre ~2 IPS lorsqu'un visage était détecté ; on peut chuter à 0.3 IPS lors de la détection de 3 visages en simultané). Une carte plus puissante pourrait permettre de résoudre ce problème, bien que nous aillons jugé les performances satisfaisantes dans notre contexte du fait que l'on pouvait tout de même déverouiller la porte.
+
 Une autre limitation de la reconnaissance facile reste la facilité de déjouer un tel système. Il suffit en effet de montrer une photo de la personne pour que le système la reconnaisse et authorise l'accès. Cependant, coupler la reconnaissance faciale à d'autres capteurs biométrique devrait permettre de limiter ce genre d'attaques.
 

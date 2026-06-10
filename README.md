@@ -4,9 +4,13 @@ Repo du projet **SAE 6 "système d'alarme"** réalisé dans le cadre de notre tr
 
 ## Concept initial
 Notre projet consiste à développer un système d’alarme domestique complet, prêt à être installé sur une maison.
+
 Les systèmes de surveillance actifs sont des détecteurs d’ouverture de portes et fenêtres ainsi qu’une caméra équipée de reconnaissance faciale à l’entrée.
+
 L’interface utilisateur sera supportée par un M5Stack qui communiquera sans fil, en HF, avec le module central. À ce dernier sont reliés tous les différents composants (capteurs, reconnaissance faciale et alarme). L’interface permettra de verrouiller et déverrouiller le système d’alarme à l’aide d’un code à composer sur l’interface ou d’un badge RFID (à condition que la personne utilisant le badge soit reconnue par la reconnaissance faciale). Lorsqu’une intrusion est détectée, un module d’alarme est déclenché. 
+
 Le module d'alimentation permet, en cas de coupure de courant, d'utiliser l'énergie stockée dans une batterie et de recharger cette dernière une fois le courant rétabli. Ce module d'alimentation est aussi responsable du déclenchement du mode dégradé permettant d'utiliser les modules critiques uniquement afin de réduire la consommation d'énergie. 
+
 La communication étant critique, le système bascule en liaison BLE en cas de problème de communication en HF pour assurer une communication en permanence.
 
 ## Cahier des charges
@@ -18,6 +22,7 @@ La communication étant critique, le système bascule en liaison BLE en cas de p
 - Communication entre le digicode et la centrale en HF
 - Protocole d'appairage entre le digicode et la centrale
 - Détection d'erreur ou de signal anormal (sur les liaisons filaires)
+
 ### Améliorations possibles :
 - Utilisation de badges RFID plutôt qu'un code, mais voir comment rendre cette solution sécurisée
 - Communications en BLE si HF non fonctionnel
@@ -26,6 +31,7 @@ La communication étant critique, le système bascule en liaison BLE en cas de p
 - Ajout d'un module GSM pour appeler le propriétaire et les forces de l'ordre ou un service de sécurité privée
 - Ajout d'un bouton panique
 - Empreinte biométrique
+
 ### Contraintes :
 - Nécessité d'utiliser des capteurs à l'état haut par défaut pour détecter les failles
 - Différenciation entre un capteur actif et un capteur absent ou endommagé
